@@ -111,10 +111,32 @@ jobs:
           output-file: ajiasu-runner-${{ matrix.arch }}.spdx.json
           artifact-name: ajiasu-runner-${{ matrix.arch }}.spdx.json
       - name: Scan image for high-severity vulnerabilities
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
-        with:
-          scan-type: image
-          image-ref: ajiasu-runner:scan-${{ matrix.arch }}
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          scanner='aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f'
+          target_image='ajiasu-runner:scan-${{ matrix.arch }}'
+          cache_volume='trivy-cache-${{ matrix.arch }}'
+
+          for attempt in 1 2 3; do
+            if docker pull "$scanner"; then
+              break
+            fi
+            if [[ $attempt -eq 3 ]]; then
+              exit 1
+            fi
+            sleep $((attempt * 2))
+          done
+
+          docker volume create "$cache_volume" >/dev/null
+          trap 'docker volume rm "$cache_volume" >/dev/null 2>&1 || true' EXIT
+          docker run --rm --pull=never \
+            --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock,readonly \
+            --mount "type=volume,source=$cache_volume,target=/root/.cache/trivy" \
+            "$scanner" image \
+            --image-src docker \
+            --scanners vuln \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --severity CRITICAL,HIGH \
+            "$target_image"
