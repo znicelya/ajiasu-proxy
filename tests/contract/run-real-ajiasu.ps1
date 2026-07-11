@@ -54,9 +54,33 @@ $dockerArgs = @(
     $containerScript
 )
 
-$config | & docker @dockerArgs
-$dockerExit = $LASTEXITCODE
+$savedOutputEncoding = $OutputEncoding
+$savedErrorActionPreference = $ErrorActionPreference
+$nativeErrorPreference = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+$savedNativeErrorPreference = if ($null -ne $nativeErrorPreference) { $nativeErrorPreference.Value } else { $null }
+$dockerExit = $null
+
+try {
+    $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    $ErrorActionPreference = 'Continue'
+    if ($null -ne $nativeErrorPreference) {
+        Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false
+    }
+
+    $config | & docker @dockerArgs
+    $dockerExit = $LASTEXITCODE
+}
+finally {
+    $OutputEncoding = $savedOutputEncoding
+    if ($null -ne $nativeErrorPreference) {
+        Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $savedNativeErrorPreference
+    }
+    $ErrorActionPreference = $savedErrorActionPreference
+}
+
+if ($null -eq $dockerExit) {
+    throw 'AJiaSu contract container failed to start'
+}
 if ($dockerExit -ne 0) {
-    [Console]::Error.WriteLine("AJiaSu contract container failed with exit code $dockerExit")
-    exit $dockerExit
+    throw "AJiaSu contract container failed with exit code $dockerExit"
 }
