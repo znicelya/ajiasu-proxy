@@ -1,1 +1,15 @@
 .worktrees/
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+*.pem
+*.key
+artifacts/
+dist/
+coverage/
+target/
+/bin/
+.idea/
+.vscode/

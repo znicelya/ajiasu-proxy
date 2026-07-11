@@ -1,0 +1,13 @@
+.git
+.github
+.idea
+.vscode
+artifacts
+coverage
+dist
+docs
+target
+*.local
+*.secret
+*.pem
+*.key
