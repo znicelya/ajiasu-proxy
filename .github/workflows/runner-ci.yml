@@ -1,0 +1,89 @@
+name: runner-ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify runner
+        shell: pwsh
+        run: ./scripts/ci.ps1
+
+  multiarch:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Read Alpine image lock
+        id: alpine
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t lines < <(grep -v '^[[:space:]]*$' runner/artifacts/alpine-3.22.lock)
+          if [[ ${#lines[@]} -ne 1 || ! ${lines[0]} =~ ^ALPINE_IMAGE=(alpine:3\.22@sha256:[0-9a-f]{64})$ ]]; then
+            echo 'invalid runner/artifacts/alpine-3.22.lock' >&2
+            exit 1
+          fi
+          printf 'image=%s\n' "${BASH_REMATCH[1]}" >>"$GITHUB_OUTPUT"
+      - name: Build multi-architecture image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          build-args: |
+            ALPINE_IMAGE=${{ steps.alpine.outputs.image }}
+
+  scan:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Read Alpine image lock
+        id: alpine
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t lines < <(grep -v '^[[:space:]]*$' runner/artifacts/alpine-3.22.lock)
+          if [[ ${#lines[@]} -ne 1 || ! ${lines[0]} =~ ^ALPINE_IMAGE=(alpine:3\.22@sha256:[0-9a-f]{64})$ ]]; then
+            echo 'invalid runner/artifacts/alpine-3.22.lock' >&2
+            exit 1
+          fi
+          printf 'image=%s\n' "${BASH_REMATCH[1]}" >>"$GITHUB_OUTPUT"
+      - name: Build scan image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ajiasu-runner:scan
+          build-args: |
+            ALPINE_IMAGE=${{ steps.alpine.outputs.image }}
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ajiasu-runner:scan
+          format: spdx-json
+          output-file: ajiasu-runner.spdx.json
+          artifact-name: ajiasu-runner.spdx.json
+      - name: Scan image for high-severity vulnerabilities
+        uses: aquasecurity/trivy-action@v0.28.0
+        with:
+          scan-type: image
+          image-ref: ajiasu-runner:scan
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: 1
