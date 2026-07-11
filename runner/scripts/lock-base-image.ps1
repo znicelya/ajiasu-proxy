@@ -4,6 +4,43 @@ $image = 'alpine:3.22'
 $tagApi = 'https://hub.docker.com/v2/repositories/library/alpine/tags/3.22'
 $digest = $null
 
+function Get-ValidatedAlpineDigest {
+    param(
+        [Parameter(Mandatory = $true)] $Tag,
+        [string] $PrimaryDigest
+    )
+
+    if ($Tag.tag_status -ne 'active') {
+        throw "Docker Hub reports alpine:3.22 tag status '$($Tag.tag_status)' instead of active"
+    }
+
+    $apiDigest = [string] $Tag.digest
+    if ($apiDigest -notmatch '^sha256:[0-9a-fA-F]{64}$') {
+        throw "Docker Hub returned an invalid multi-arch digest for alpine:3.22: $apiDigest"
+    }
+    $apiDigest = $apiDigest.ToLowerInvariant()
+
+    $activeLinuxAmd64 = @($Tag.images | Where-Object {
+        $_.status -eq 'active' -and $_.os -eq 'linux' -and $_.architecture -eq 'amd64'
+    })
+    $activeLinuxArm64 = @($Tag.images | Where-Object {
+        $_.status -eq 'active' -and $_.os -eq 'linux' -and $_.architecture -eq 'arm64'
+    })
+    if ($activeLinuxAmd64.Count -eq 0 -or $activeLinuxArm64.Count -eq 0) {
+        throw 'Docker Hub did not return active linux/amd64 and linux/arm64 images for alpine:3.22'
+    }
+
+    if ($PrimaryDigest) {
+        $normalizedPrimaryDigest = $PrimaryDigest.ToLowerInvariant()
+        if ($normalizedPrimaryDigest -cne $apiDigest) {
+            throw "official registry digest $normalizedPrimaryDigest did not match Docker Hub Tag API digest $apiDigest"
+        }
+        return $normalizedPrimaryDigest
+    }
+
+    return $apiDigest
+}
+
 for ($attempt = 1; $attempt -le 3; $attempt++) {
     try {
         $inspection = docker buildx imagetools inspect $image 2>&1
@@ -28,29 +65,8 @@ for ($attempt = 1; $attempt -le 3; $attempt++) {
     }
 }
 
-if (-not $digest) {
-    $tag = Invoke-RestMethod -Uri $tagApi -Method Get
-    if ($tag.tag_status -ne 'active') {
-        throw "Docker Hub reports ${image} tag status '$($tag.tag_status)' instead of active"
-    }
-
-    $apiDigest = [string] $tag.digest
-    if ($apiDigest -notmatch '^sha256:[0-9a-fA-F]{64}$') {
-        throw "Docker Hub returned an invalid multi-arch digest for ${image}: $apiDigest"
-    }
-
-    $activeLinuxAmd64 = @($tag.images | Where-Object {
-        $_.status -eq 'active' -and $_.os -eq 'linux' -and $_.architecture -eq 'amd64'
-    })
-    $activeLinuxArm64 = @($tag.images | Where-Object {
-        $_.status -eq 'active' -and $_.os -eq 'linux' -and $_.architecture -eq 'arm64'
-    })
-    if ($activeLinuxAmd64.Count -eq 0 -or $activeLinuxArm64.Count -eq 0) {
-        throw "Docker Hub did not return active linux/amd64 and linux/arm64 images for ${image}"
-    }
-
-    $digest = $apiDigest.ToLowerInvariant()
-}
+$tag = Invoke-RestMethod -Uri $tagApi -Method Get
+$digest = Get-ValidatedAlpineDigest -Tag $tag -PrimaryDigest $digest
 
 $lockLine = "ALPINE_IMAGE=${image}@${digest}"
 if ($lockLine -notmatch '^ALPINE_IMAGE=alpine:3\.22@sha256:[0-9a-f]{64}$') {
