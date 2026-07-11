@@ -18,8 +18,8 @@ RUN addgroup -g 65532 -S runner && adduser -S -D -H -u 65532 -G runner runner \
     && mkdir -p /run/ajiasu /var/lib/ajiasu \
     && ln -s /run/ajiasu/ajiasu.conf /etc/ajiasu.conf \
     && chown -R 65532:65532 /run/ajiasu /var/lib/ajiasu
-COPY --from=fetch --chown=65532:65532 /out/ajiasu /usr/local/bin/ajiasu
-COPY --chown=65532:65532 runner/bin/runner-entrypoint.sh /usr/local/bin/runner-entrypoint.sh
+COPY --from=fetch --chmod=0555 /out/ajiasu /usr/local/bin/ajiasu
+COPY --chmod=0555 runner/bin/runner-entrypoint.sh /usr/local/bin/runner-entrypoint.sh
 USER 65532:65532
 WORKDIR /var/lib/ajiasu
 ENTRYPOINT ["/usr/local/bin/runner-entrypoint.sh"]

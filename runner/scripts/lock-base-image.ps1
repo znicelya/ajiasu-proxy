@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $image = 'alpine:3.22'
+$tagApi = 'https://hub.docker.com/v2/repositories/library/alpine/tags/3.22'
 $digest = $null
 
 for ($attempt = 1; $attempt -le 3; $attempt++) {
@@ -19,9 +20,36 @@ for ($attempt = 1; $attempt -le 3; $attempt++) {
         break
     }
     catch {
-        if ($attempt -eq 3) { throw }
+        if ($attempt -eq 3) {
+            Write-Warning "official registry inspection failed after $attempt attempts; using the official Docker Hub Tag API: $($_.Exception.Message)"
+            break
+        }
         Start-Sleep -Seconds ([math]::Pow(2, $attempt - 1))
     }
+}
+
+if (-not $digest) {
+    $tag = Invoke-RestMethod -Uri $tagApi -Method Get
+    if ($tag.tag_status -ne 'active') {
+        throw "Docker Hub reports ${image} tag status '$($tag.tag_status)' instead of active"
+    }
+
+    $apiDigest = [string] $tag.digest
+    if ($apiDigest -notmatch '^sha256:[0-9a-fA-F]{64}$') {
+        throw "Docker Hub returned an invalid multi-arch digest for ${image}: $apiDigest"
+    }
+
+    $activeLinuxAmd64 = @($tag.images | Where-Object {
+        $_.status -eq 'active' -and $_.os -eq 'linux' -and $_.architecture -eq 'amd64'
+    })
+    $activeLinuxArm64 = @($tag.images | Where-Object {
+        $_.status -eq 'active' -and $_.os -eq 'linux' -and $_.architecture -eq 'arm64'
+    })
+    if ($activeLinuxAmd64.Count -eq 0 -or $activeLinuxArm64.Count -eq 0) {
+        throw "Docker Hub did not return active linux/amd64 and linux/arm64 images for ${image}"
+    }
+
+    $digest = $apiDigest.ToLowerInvariant()
 }
 
 $lockLine = "ALPINE_IMAGE=${image}@${digest}"
@@ -31,12 +59,25 @@ if ($lockLine -notmatch '^ALPINE_IMAGE=alpine:3\.22@sha256:[0-9a-f]{64}$') {
 
 $artifactDirectory = Join-Path $PSScriptRoot '..\artifacts'
 $lockPath = Join-Path $artifactDirectory 'alpine-3.22.lock'
+$temporaryPath = "$lockPath.tmp.$PID.$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Force -Path $artifactDirectory | Out-Null
-Set-Content -LiteralPath $lockPath -Value $lockLine -Encoding ascii
+try {
+    Set-Content -LiteralPath $temporaryPath -Value $lockLine -Encoding ascii
 
-$writtenLine = (Get-Content -LiteralPath $lockPath -Raw).TrimEnd("`r", "`n")
-if ($writtenLine -cne $lockLine) {
-    throw "written Alpine image lock did not match the resolved value"
+    $writtenContent = Get-Content -LiteralPath $temporaryPath -Raw
+    if ($writtenContent -notmatch '^ALPINE_IMAGE=alpine:3\.22@sha256:[0-9a-f]{64}\r?\n$') {
+        throw "temporary Alpine image lock did not contain exactly one valid line"
+    }
+    if ($writtenContent.TrimEnd("`r", "`n") -cne $lockLine) {
+        throw "temporary Alpine image lock did not match the resolved value"
+    }
+
+    Move-Item -LiteralPath $temporaryPath -Destination $lockPath -Force
+}
+finally {
+    if (Test-Path -LiteralPath $temporaryPath) {
+        Remove-Item -LiteralPath $temporaryPath -Force
+    }
 }
 
 Write-Output $lockLine
