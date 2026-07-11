@@ -139,7 +139,7 @@ $alpineImage = $Matches[1]
 $mount = "type=bind,source=$repoRoot,target=/workspace,readonly"
 $shellTests = @'
 set -eu
-apk add --no-cache curl tar coreutils
+apk add --no-cache curl tar coreutils openssl
 /bin/sh runner/tests/fetch-ajiasu.test.sh
 /bin/sh runner/tests/entrypoint.test.sh
 '@
