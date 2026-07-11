@@ -6,9 +6,23 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 
 BIN=$TMP/bin/ajiasu
+ARGUMENT_PROBE=$TMP/bin/argument-probe
 CONFIG=$TMP/ajiasu.conf
 mkdir -p "$TMP/bin"
 install -m 0755 "$ROOT/runner/testdata/fake-ajiasu.sh" "$BIN"
+cat >"$ARGUMENT_PROBE" <<'EOF'
+#!/bin/sh
+set -eu
+
+printf 'argc=%s\n' "$#"
+INDEX=1
+for ARG
+do
+  printf 'arg[%s]=<%s>\n' "$INDEX" "$ARG"
+  INDEX=$((INDEX + 1))
+done
+EOF
+chmod 0755 "$ARGUMENT_PROBE"
 printf 'user example\npass secret\n' >"$CONFIG"
 chmod 0600 "$CONFIG"
 
@@ -32,6 +46,17 @@ LIST_OUTPUT=$(AJIASU_BIN="$BIN" AJIASU_CONFIG="$CONFIG" \
   "$ROOT/runner/bin/runner-entrypoint.sh" list)
 printf '%s\n' "$LIST_OUTPUT" | grep -F 'Command: list' >/dev/null
 printf '%s\n' "$LIST_OUTPUT" | grep -F 'vvn-test-1 ok Test Node #1' >/dev/null
+
+ARGUMENT_OUTPUT=$(AJIASU_BIN="$ARGUMENT_PROBE" AJIASU_CONFIG="$CONFIG" \
+  "$ROOT/runner/bin/runner-entrypoint.sh" first 'two words' third)
+EXPECTED_ARGUMENT_OUTPUT='argc=3
+arg[1]=<first>
+arg[2]=<two words>
+arg[3]=<third>'
+if [ "$ARGUMENT_OUTPUT" != "$EXPECTED_ARGUMENT_OUTPUT" ]; then
+  printf 'unexpected argument probe output:\n%s\n' "$ARGUMENT_OUTPUT" >&2
+  exit 1
+fi
 
 rm "$CONFIG"
 set +e
