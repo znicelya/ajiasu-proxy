@@ -2,7 +2,7 @@
 
 This repository is the secure Runner and supply-chain foundation for a planned enterprise proxy platform. It is not a finished single-container VPN workflow or a production orchestration package. The broader platform will add a control plane, tenant isolation, policy, scheduling, gateways, observability, and deployment packaging in later phases.
 
-The Runner packages the unmodified official AJiaSu Linux CLI in a dedicated security boundary. The image starts as the non-root user `65532:65532`, uses a locked base-image digest, and verifies the official AJiaSu archive checksum and byte size before installation. Initial image support is limited to `linux/amd64` and `linux/arm64`.
+The Runner packages the unmodified official AJiaSu Linux CLI for an intended containerized, one-connection isolation boundary. This Phase 1 image is a foundation for that boundary, not a claim that later orchestration or production isolation is already complete. The image starts as the non-root user `65532:65532`, uses a locked base-image digest, and verifies the official AJiaSu archive checksum and byte size before installation. Initial image support is limited to `linux/amd64` and `linux/arm64`.
 
 ## Security and compliance boundary
 
@@ -18,9 +18,29 @@ See the [Runner security-boundary ADR](docs/adr/0001-runner-security-boundary.md
 
 The artifact lock currently selects AJiaSu `4.2.3.0` independently for each supported architecture. Build only with the checked-in Alpine digest lock:
 
+Prerequisites are a running Docker engine with Docker Buildx and PowerShell 7 (`pwsh`). PowerShell 7 is required on both Windows and Linux to run the cross-platform CI script.
+
+PowerShell 7:
+
 ```powershell
-$lock = Get-Content runner/artifacts/alpine-3.22.lock | ConvertFrom-StringData
-docker build --build-arg "ALPINE_IMAGE=$($lock.ALPINE_IMAGE)" -t ajiasu-runner:test .
+$lockLines = @(Get-Content -LiteralPath runner/artifacts/alpine-3.22.lock)
+if ($lockLines.Count -ne 1 -or $lockLines[0] -notmatch '^ALPINE_IMAGE=(alpine:3\.22@sha256:[0-9a-f]{64})$') {
+    throw 'invalid Alpine image lock'
+}
+$alpineImage = $Matches[1]
+docker build --pull=false --build-arg "ALPINE_IMAGE=$alpineImage" -t ajiasu-runner:test .
+```
+
+Bash:
+
+```bash
+set -eu
+lock_file=runner/artifacts/alpine-3.22.lock
+[ "$(awk 'END { print NR }' "$lock_file")" -eq 1 ] || { echo 'invalid Alpine image lock line count' >&2; exit 1; }
+lock_line=$(sed -n '1p' "$lock_file")
+printf '%s\n' "$lock_line" | grep -Eq '^ALPINE_IMAGE=alpine:3\.22@sha256:[0-9a-f]{64}$' || { echo 'invalid Alpine image lock' >&2; exit 1; }
+alpine_image=${lock_line#ALPINE_IMAGE=}
+docker build --pull=false --build-arg "ALPINE_IMAGE=$alpine_image" -t ajiasu-runner:test .
 ```
 
 Do not replace the locked digest with a mutable tag or bypass the archive checksum verification.
@@ -30,10 +50,10 @@ Do not replace the locked digest with a mutable tag or bypass the archive checks
 Run the complete local gate from the repository root:
 
 ```powershell
-powershell -File scripts/ci.ps1
+pwsh -File scripts/ci.ps1
 ```
 
-This runs the artifact and entrypoint tests, builds the locked image, checks the non-root image contract, and runs the fake AJiaSu CLI contract. Real-account testing is a separate protected operation governed by the usage gate.
+Use that same `pwsh` command from PowerShell 7 on Windows or Linux. It runs the artifact and entrypoint tests, builds the locked image, checks the non-root image contract, and runs the fake AJiaSu CLI contract. Real-account testing is a separate protected operation governed by the usage gate.
 
 ## Project documents
 
