@@ -1,8 +1,12 @@
 .git
 .github
+.worktrees
 .idea
 .vscode
-artifacts
+.env
+.env.*
+!.env.example
+/artifacts
 coverage
 dist
 docs

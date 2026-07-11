@@ -6,7 +6,7 @@
 *.secret
 *.pem
 *.key
-artifacts/
+/artifacts/
 dist/
 coverage/
 target/
