@@ -1,273 +1,48 @@
-# AJiaSu Docker
+# AJiaSu Enterprise Proxy Platform Foundation
 
-> The [`ajiasu`](https://www.91ajs.com/) is a proxy tool specifically for the China region, with a large selection of cities that you can use to change your IP address.
+This repository is the secure Runner and supply-chain foundation for a planned enterprise proxy platform. It is not a finished single-container VPN workflow or a production orchestration package. The broader platform will add a control plane, tenant isolation, policy, scheduling, gateways, observability, and deployment packaging in later phases.
 
-## Basic Option
+The Runner packages the unmodified official AJiaSu Linux CLI in a dedicated security boundary. The image starts as the non-root user `65532:65532`, uses a locked base-image digest, and verifies the official AJiaSu archive checksum and byte size before installation. Initial image support is limited to `linux/amd64` and `linux/arm64`.
 
-CLI usage:
+## Security and compliance boundary
 
-```ini
-ajiasu -h
-ajiasu {login|list|logout}
-ajiasu connect "Shanghai 1*"
+- Run one isolated Runner per active connection; never share a Runner across tenants.
+- Start with a read-only root filesystem and `--cap-drop ALL`. Add a device or capability only after protected contract testing proves it is required.
+- The legacy `network_mode: host` and `privileged: true` approach is unsupported for the enterprise platform. Host PID, host IPC, and broad container-runtime access are also prohibited defaults.
+- Complete the [AJiaSu usage gate](docs/compliance/ajiasu-usage-gate.md) before real-account CI or production use. Fake contracts and binary-integrity checks do not authorize use of the service.
+- Never store AJiaSu credentials in repository files, Compose files, command history, or CI logs.
+
+See the [Runner security-boundary ADR](docs/adr/0001-runner-security-boundary.md) and [Runner image operations guide](docs/operations/runner-image.md) for the enforced runtime and maintenance procedures.
+
+## Build the locked Runner image
+
+The artifact lock currently selects AJiaSu `4.2.3.0` independently for each supported architecture. Build only with the checked-in Alpine digest lock:
+
+```powershell
+$lock = Get-Content runner/artifacts/alpine-3.22.lock | ConvertFrom-StringData
+docker build --build-arg "ALPINE_IMAGE=$($lock.ALPINE_IMAGE)" -t ajiasu-runner:test .
 ```
 
-Config file options:
+Do not replace the locked digest with a mutable tag or bypass the archive checksum verification.
 
-```ini
-user [USERNAME]
-pass [PASSWORD]
+## Verify the foundation
 
-cache_dir [CACHE_DIR]
-connect [SERVER_NAME]
-protocol {udp|tcp|lwip|socks5|http|proxy}
-use_vpn_dns {yes|no}
-use_vpn_route {yes|no}
-up_down [SCRIPT_FILE]
+Run the complete local gate from the repository root:
+
+```powershell
+powershell -File scripts/ci.ps1
 ```
 
-## Quick Start
+This runs the artifact and entrypoint tests, builds the locked image, checks the non-root image contract, and runs the fake AJiaSu CLI contract. Real-account testing is a separate protected operation governed by the usage gate.
 
-After the following few steps, the `ajiasu` container will be working on your system. Before that, make sure `docker` and `docker-compose` are installed.
+## Project documents
 
-### Preparation
-
-Choose a working directory, and create a file named `ajiasu.conf` below. It include username and password, the template is as follows:
-
-```ini
-user [YOUR_USERNAME]
-pass [YOUR_PASSWORD]
-
-protocol lwip
-cache_dir /etc/ajiasu
-```
-
-### Login
-
-Create `login.yml` in the working directory and write these contents:
-
-```yaml
-version: '3'
-services:
-  ajiasu:
-    image: dnomd343/ajiasu
-    command: [login]
-    volumes:
-      - ./:/etc/ajiasu/
-      - ./ajiasu.conf:/etc/ajiasu.conf
-```
-
-Execute the login command, if successful, there will be an output similar to the following:
-
-```bash
-$ docker-compose -f login.yml up
-Creating network "ajiasu_default" with the default driver
-Creating ajiasu_ajiasu_1 ... done
-Attaching to ajiasu_ajiasu_1
-ajiasu_1  | ajiasu 4.1.1.0 (core:20210315-1730)
-ajiasu_1  | Load config file: /etc/ajiasu.conf
-ajiasu_1  | Command: login
-ajiasu_1  | Account: ···
-ajiasu_1  | Logging in ...
-ajiasu_1  | Login done.
-ajiasu_1  | =====================================================
-ajiasu_1  | Web Site: https://www.91ajs.com
-ajiasu_1  | Login Result: OK
-ajiasu_1  | Membership: 爱加速会员
-ajiasu_1  | Expiration: ···
-ajiasu_1  | =====================================================
-ajiasu_ajiasu_1 exited with code 0
-
-# This command is optional
-$ docker-compose -f login.yml down
-Removing ajiasu_ajiasu_1 ... done
-Removing network ajiasu_default
-```
-
-### Listing
-
-Create `list.yml` in the working directory and write these contents:
-
-```yaml
-version: '3'
-services:
-  ajiasu:
-    image: dnomd343/ajiasu
-    command: [list]
-    volumes:
-      - ./:/etc/ajiasu/
-      - ./ajiasu.conf:/etc/ajiasu.conf
-```
-
-Execute the list command, if successful, there will be an output similar to the following:
-
-```bash
-$ docker-compose -f list.yml up
-Creating network "ajiasu_default" with the default driver
-Creating ajiasu_ajiasu_1 ... done
-Attaching to ajiasu_ajiasu_1
-ajiasu_1  | ajiasu 4.1.1.0 (core:20210315-1730)
-ajiasu_1  | Load config file: /etc/ajiasu.conf
-ajiasu_1  | Command: list
-ajiasu_1  | Account: ···
-ajiasu_1  |       id Status     Name (Comment)
-ajiasu_1  | vvn-2076-264 ok         镇江 #1
-ajiasu_1  | vvn-2081-23 ok         绍兴 #1
-ajiasu_1  | vvn-2086-308 ok         南通 #1
-ajiasu_1  | vvn-2106-527 ok         丽水 #1
-ajiasu_1  | vvn-2111-684 ok         温州 #1
-ajiasu_1  | vvn-2226-4013 ok         徐州 #2
-ajiasu_1  | vvn-2431-4824 ok         厦门 #21
-ajiasu_1  | vvn-2441-1877 ok         沈阳 #3
-···
-···
-···
-ajiasu_1  | vvn-5318-6878 ok         昭通 #1
-ajiasu_1  | vvn-5319-6881 ok         海南藏族自治州 #2
-ajiasu_1  | vvn-5320-6880 ok         海南藏族自治州 #1
-ajiasu_1  | =====================================================
-ajiasu_1  | Web Site: https://www.91ajs.com
-ajiasu_1  | Login Result: OK
-ajiasu_1  | Membership: 爱加速会员
-ajiasu_1  | Expiration: ···
-ajiasu_1  | =====================================================
-ajiasu_ajiasu_1 exited with code 0
-
-# This command is optional
-$ docker-compose -f list.yml down
-Removing ajiasu_ajiasu_1 ... done
-Removing network ajiasu_default
-```
-
-### Connect
-
-Select a node and modify `ajiasu.conf` file, add the bottom line, the modified file is as follows:
-
-```ini
-user [YOUR_USERNAME]
-pass [YOUR_PASSWORD]
-
-protocol lwip
-cache_dir /etc/ajiasu
-connect vvn-...
-```
-
-Create `compose.yml` in the working directory and write these contents:
-
-```yml
-version: '3'
-services:
-  ajiasu:
-    image: dnomd343/ajiasu
-    container_name: ajiasu
-    network_mode: host
-    privileged: true
-    restart: always
-    command: [connect]
-    volumes:
-      - ./:/etc/ajiasu/
-      - ./ajiasu.conf:/etc/ajiasu.conf
-```
-
-Executing the following command will start the `ajiasu` service:
-
-```bash
-$ docker-compose up -d
-Creating ajiasu ... done
-```
-
-If nothing unexcepted, `ajiasu` is already working normally, you can check the IP to confirm:
-
-```bash
-# whether the IP location is the city you choose
-$ curl ip.343.re/info
-IP: ···
-AS: ···
-City: 重庆
-Region: 重庆
-Country: CN - China（中国）
-Timezone: Asia/Shanghai
-Location: 29.59,106.54
-ISP: China Unicom Limited
-Scope: ···
-Detail: 重庆市联通
-```
-
-If something goes wrong, you can check the logs:
-
-```bash
-$ docker-compose logs
-Attaching to ajiasu
-···
-```
-
-While it is running, you can quickly list all nodes:
-
-```bash
-$ docker exec ajiasu ajiasu list
-ajiasu 4.1.1.0 (core:20210315-1730)
-Load config file: /etc/ajiasu.conf
-Command: list
-Account: ···
-      id Status     Name (Comment)
-vvn-2076-264 ok         镇江 #1
-vvn-2081-23 ok         绍兴 #1
-vvn-2086-308 ok         南通 #1
-vvn-2106-527 ok         丽水 #1
-vvn-2111-684 ok         温州 #1
-vvn-2226-4013 ok         徐州 #2
-vvn-2431-4824 ok         厦门 #21
-vvn-2441-1877 ok         沈阳 #3
-···
-···
-···
-vvn-5318-6878 ok         昭通 #1
-vvn-5319-6881 ok         海南藏族自治州 #2
-vvn-5320-6880 ok         海南藏族自治州 #1
-=====================================================
-Web Site: https://www.91ajs.com
-Login Result: OK
-Membership: 爱加速会员
-Expiration: ···
-=====================================================
-```
-
-### Exit
-
-When you do not need the `ajiasu` service, execute the following command to close it:
-
-```bash
-$ docker-compose down
-Stopping ajiasu ... done
-Removing ajiasu ... done
-```
-
-You don't need to repeat the login and listing process at the next startup. If you need to switch nodes, just modify the last line of the `ajiasu.conf` file and execute the following command:
-
-```bash
-$ docker-compose up -d
-Creating ajiasu ... done
-
-# Switch node -> modify ajiasu.conf first
-
-$ docker-compose restart
-Restarting ajiasu ... done
-```
-
-## Build
-
-You can build the container image yourself if necessary.
-
-```bash
-docker build -t ajiasu https://github.com/dnomd343/ajiasu-docker.git
-```
-
-At the same time, it is also possible to perform a cross-build.
-
-```bash
-docker buildx build -t dnomd343/ajiasu --platform="linux/amd64,linux/arm64,linux/386,linux/arm/v7" https://github.com/dnomd343/ajiasu-docker.git --push
-```
+- [Approved enterprise platform design](docs/superpowers/specs/2026-07-11-enterprise-proxy-platform-design.md)
+- [Enterprise platform roadmap](docs/superpowers/plans/2026-07-11-enterprise-proxy-platform-roadmap.md)
+- [Runner security-boundary ADR](docs/adr/0001-runner-security-boundary.md)
+- [AJiaSu usage gate](docs/compliance/ajiasu-usage-gate.md)
+- [Runner image operations guide](docs/operations/runner-image.md)
 
 ## License
 
-MIT ©2023 [@dnomd343](https://github.com/dnomd343)
+Repository code is licensed under the MIT License. AJiaSu is third-party software governed by its own license and service terms; repository licensing does not grant permission to operate AJiaSu.
