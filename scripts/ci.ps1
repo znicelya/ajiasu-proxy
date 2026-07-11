@@ -25,7 +25,27 @@ function Invoke-NativeCommand {
         [ValidateRange(1, 10)][int] $Attempts = 1
     )
 
-    $command = Format-Command -FilePath $FilePath -Arguments $Arguments
+    $requestedCommand = Format-Command -FilePath $FilePath -Arguments $Arguments
+    try {
+        $resolvedCommands = @(Get-Command -Name $FilePath -CommandType Application -ErrorAction Stop)
+        $resolvedCommand = $resolvedCommands[0]
+        $resolvedPath = if (-not [string]::IsNullOrWhiteSpace($resolvedCommand.Source)) {
+            $resolvedCommand.Source
+        }
+        else {
+            $resolvedCommand.Path
+        }
+        if ([string]::IsNullOrWhiteSpace($resolvedPath)) {
+            throw "Resolved command has no executable path: $FilePath"
+        }
+    }
+    catch {
+        Write-Host "[ci] command: $requestedCommand"
+        Write-Host '[ci] exit: not-started'
+        throw "Command is not an executable application: $requestedCommand`n$($_.Exception.Message)"
+    }
+
+    $command = Format-Command -FilePath $resolvedPath -Arguments $Arguments
     for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
         Write-Host "[ci] command: $command"
         if ($Attempts -gt 1) {
@@ -34,6 +54,7 @@ function Invoke-NativeCommand {
 
         $exitCode = $null
         $invocationError = $null
+        $invocationSucceeded = $false
         $previousErrorActionPreference = $ErrorActionPreference
         $nativeErrorPreference = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
         $previousNativeErrorPreference = if ($null -ne $nativeErrorPreference) { $nativeErrorPreference.Value } else { $null }
@@ -44,8 +65,10 @@ function Invoke-NativeCommand {
                 Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false
             }
 
-            & $FilePath @Arguments
-            $exitCode = $LASTEXITCODE
+            $global:LASTEXITCODE = $null
+            & $resolvedPath @Arguments
+            $invocationSucceeded = $?
+            $exitCode = $global:LASTEXITCODE
         }
         catch {
             $invocationError = $_
@@ -60,7 +83,7 @@ function Invoke-NativeCommand {
         $exitDisplay = if ($null -eq $exitCode) { 'not-started' } else { [string] $exitCode }
         Write-Host "[ci] exit: $exitDisplay"
 
-        if ($null -eq $invocationError -and $exitCode -eq 0) {
+        if ($null -eq $invocationError -and $null -ne $exitCode -and $exitCode -eq 0) {
             return
         }
 
@@ -72,6 +95,10 @@ function Invoke-NativeCommand {
 
         if ($null -ne $invocationError) {
             throw "Command failed to start: $command`n$($invocationError.Exception.Message)"
+        }
+        if ($null -eq $exitCode) {
+            $successDetail = if ($invocationSucceeded) { 'reported success' } else { 'reported failure' }
+            throw "Command $successDetail but did not provide a native exit code: $command"
         }
         throw "Command failed with exit code ${exitCode}: $command"
     }
@@ -92,6 +119,9 @@ function Invoke-PowerShellScript {
 }
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+if ($repoRoot.Contains(',')) {
+    throw "Repository path contains a comma and cannot be safely passed to Docker --mount: $repoRoot"
+}
 $lockPath = Join-Path $repoRoot 'runner/artifacts/alpine-3.22.lock'
 $lockLines = @(
     Get-Content -LiteralPath $lockPath |

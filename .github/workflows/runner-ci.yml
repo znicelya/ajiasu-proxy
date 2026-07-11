@@ -12,20 +12,26 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Verify runner
         shell: pwsh
         run: ./scripts/ci.ps1
 
   multiarch:
     needs: verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Read Alpine image lock
         id: alpine
         shell: bash
@@ -38,7 +44,7 @@ jobs:
           fi
           printf 'image=%s\n' "${BASH_REMATCH[1]}" >>"$GITHUB_OUTPUT"
       - name: Build multi-architecture image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -48,10 +54,20 @@ jobs:
 
   scan:
     needs: verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Read Alpine image lock
         id: alpine
         shell: bash
@@ -64,26 +80,27 @@ jobs:
           fi
           printf 'image=%s\n' "${BASH_REMATCH[1]}" >>"$GITHUB_OUTPUT"
       - name: Build scan image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          push: false
-          tags: ajiasu-runner:scan
-          build-args: |
-            ALPINE_IMAGE=${{ steps.alpine.outputs.image }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform "linux/${{ matrix.arch }}" \
+            --load \
+            --build-arg "ALPINE_IMAGE=${{ steps.alpine.outputs.image }}" \
+            --tag "ajiasu-runner:scan-${{ matrix.arch }}" \
+            .
       - name: Generate SPDX SBOM
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
-          image: ajiasu-runner:scan
+          image: ajiasu-runner:scan-${{ matrix.arch }}
           format: spdx-json
-          output-file: ajiasu-runner.spdx.json
-          artifact-name: ajiasu-runner.spdx.json
+          output-file: ajiasu-runner-${{ matrix.arch }}.spdx.json
+          artifact-name: ajiasu-runner-${{ matrix.arch }}.spdx.json
       - name: Scan image for high-severity vulnerabilities
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
         with:
           scan-type: image
-          image-ref: ajiasu-runner:scan
+          image-ref: ajiasu-runner:scan-${{ matrix.arch }}
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: 1
