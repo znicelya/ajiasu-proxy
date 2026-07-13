@@ -20,6 +20,10 @@ if ($content -notmatch "AJIASU_REQUIRE_DOCKER\s*=\s*'1'") {
     throw 'control-plane CI must require Docker-backed integration tests'
 }
 
+if (-not $content.Contains("Invoke-NativeCommand -FilePath 'go' -Arguments @('test', '-race', '-p', '1', './...')")) {
+    throw 'control-plane CI must serialize Docker-backed package tests on Windows'
+}
+
 if (-not $content.Contains("Invoke-PowerShellScript -Path (Join-Path `$repoRoot 'scripts/lock-control-plane-images.test.ps1')")) {
     throw 'control-plane CI must execute the image-lock fixture tests'
 }

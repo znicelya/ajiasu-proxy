@@ -81,7 +81,7 @@ try {
     Invoke-NativeCommand -FilePath 'go' -Arguments @('tool', 'sqlc', 'diff')
 
     $env:AJIASU_REQUIRE_DOCKER = '1'
-    Invoke-NativeCommand -FilePath 'go' -Arguments @('test', '-race', './...')
+    Invoke-NativeCommand -FilePath 'go' -Arguments @('test', '-race', '-p', '1', './...')
     Invoke-NativeCommand -FilePath 'go' -Arguments @('vet', './...')
     Invoke-NativeCommand -FilePath 'go' -Arguments @('tool', 'staticcheck', './...')
 }
