@@ -23,10 +23,15 @@ func MigrationsUp(t *testing.T, dsn string) {
 
 func MigrationsDown(t *testing.T, dsn string) {
 	t.Helper()
+	MigrationsDownTo(t, dsn, 0)
+}
+
+func MigrationsDownTo(t *testing.T, dsn string, version int64) {
+	t.Helper()
 	provider, db := migrationProvider(t, dsn)
 	defer db.Close()
-	if _, err := provider.Down(t.Context()); err != nil {
-		t.Fatalf("migrate PostgreSQL down: %v", err)
+	if _, err := provider.DownTo(t.Context(), version); err != nil {
+		t.Fatalf("migrate PostgreSQL down to %d: %v", version, err)
 	}
 }
 
