@@ -48,6 +48,10 @@ type Database struct {
 type DatabasePool struct {
 	DSN                string
 	MaxOpenConnections int
+	MinIdleConnections int
+	// MaxIdleConnections is the Task 1 compatibility alias for MinIdleConnections.
+	// New callers should use MinIdleConnections because pgx configures a minimum
+	// warm-idle target rather than a maximum idle connection count.
 	MaxIdleConnections int
 }
 
@@ -145,10 +149,10 @@ func (c Config) LogValue() slog.Value {
 		slog.Group("database",
 			slog.String("normal_dsn", "[redacted]"),
 			slog.Int("normal_max_open", c.Database.Normal.MaxOpenConnections),
-			slog.Int("normal_max_idle", c.Database.Normal.MaxIdleConnections),
+			slog.Int("normal_min_idle", c.Database.Normal.MinIdleConnections),
 			slog.String("platform_dsn", "[redacted]"),
 			slog.Int("platform_max_open", c.Database.Platform.MaxOpenConnections),
-			slog.Int("platform_max_idle", c.Database.Platform.MaxIdleConnections),
+			slog.Int("platform_min_idle", c.Database.Platform.MinIdleConnections),
 		),
 		slog.Group("oidc",
 			slog.String("issuer", c.OIDC.Issuer),
@@ -224,14 +228,60 @@ func (l loader) databasePool(name string) (DatabasePool, error) {
 	if err != nil {
 		return DatabasePool{}, err
 	}
-	maxIdle, err := l.nonnegativeInt(prefix + "_MAX_IDLE")
+	minIdle, err := l.idleConnections(prefix)
 	if err != nil {
 		return DatabasePool{}, err
 	}
-	if maxIdle > maxOpen {
-		return DatabasePool{}, fieldError(prefix+"_MAX_IDLE", "must not exceed max open connections")
+	if minIdle > maxOpen {
+		return DatabasePool{}, fieldError(prefix+"_MIN_IDLE", "must not exceed max open connections")
 	}
-	return DatabasePool{DSN: dsn, MaxOpenConnections: maxOpen, MaxIdleConnections: maxIdle}, nil
+	return DatabasePool{
+		DSN:                dsn,
+		MaxOpenConnections: maxOpen,
+		MinIdleConnections: minIdle,
+		MaxIdleConnections: minIdle,
+	}, nil
+}
+
+func (l loader) idleConnections(prefix string) (int, error) {
+	minName := prefix + "_MIN_IDLE"
+	legacyName := prefix + "_MAX_IDLE"
+	minValue, minSet := l.lookup(minName)
+	legacyValue, legacySet := l.lookup(legacyName)
+	minSet = minSet && strings.TrimSpace(minValue) != ""
+	legacySet = legacySet && strings.TrimSpace(legacyValue) != ""
+	if !minSet && !legacySet {
+		return 0, fieldError(minName, "is required")
+	}
+
+	parse := func(name, value string) (int, error) {
+		result, err := strconv.Atoi(value)
+		if err != nil {
+			return 0, fieldError(name, "must be an integer")
+		}
+		if result < 0 {
+			return 0, fieldError(name, "must not be negative")
+		}
+		return result, nil
+	}
+
+	if minSet {
+		minIdle, err := parse(minName, minValue)
+		if err != nil {
+			return 0, err
+		}
+		if legacySet {
+			legacyIdle, err := parse(legacyName, legacyValue)
+			if err != nil {
+				return 0, err
+			}
+			if minIdle != legacyIdle {
+				return 0, fieldError(minName, fmt.Sprintf("must match %s when both aliases are set", legacyName))
+			}
+		}
+		return minIdle, nil
+	}
+	return parse(legacyName, legacyValue)
 }
 
 func (l loader) loadOIDC(environment Environment) (OIDC, error) {
@@ -361,17 +411,6 @@ func (l loader) positiveInt(name string) (int, error) {
 	}
 	if value <= 0 {
 		return 0, fieldError(name, "must be positive")
-	}
-	return value, nil
-}
-
-func (l loader) nonnegativeInt(name string) (int, error) {
-	value, err := l.integer(name)
-	if err != nil {
-		return 0, err
-	}
-	if value < 0 {
-		return 0, fieldError(name, "must not be negative")
 	}
 	return value, nil
 }

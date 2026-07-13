@@ -199,12 +199,41 @@ func TestLoadAcceptsExplicitDevelopmentConfiguration(t *testing.T) {
 	if cfg.HTTP.Bind != "127.0.0.1:8080" || cfg.HTTP.ShutdownTimeout != 7*time.Second {
 		t.Fatalf("HTTP = %#v", cfg.HTTP)
 	}
-	if cfg.Database.Normal.MaxOpenConnections != 8 || cfg.Database.Platform.MaxIdleConnections != 3 {
+	if cfg.Database.Normal.MaxOpenConnections != 8 || cfg.Database.Platform.MinIdleConnections != 3 || cfg.Database.Platform.MaxIdleConnections != 3 {
 		t.Fatalf("Database = %#v", cfg.Database)
 	}
 	if !cfg.LocalAuth.Enabled || len(cfg.LocalAuth.AllowedCIDRs) != 2 {
 		t.Fatalf("LocalAuth = %#v", cfg.LocalAuth)
 	}
+}
+
+func TestLoadAcceptsLegacyMaxIdleConfiguration(t *testing.T) {
+	env := validEnvironment(t)
+	env["AJIASU_DATABASE_NORMAL_MAX_IDLE"] = env["AJIASU_DATABASE_NORMAL_MIN_IDLE"]
+	env["AJIASU_DATABASE_PLATFORM_MAX_IDLE"] = env["AJIASU_DATABASE_PLATFORM_MIN_IDLE"]
+	delete(env, "AJIASU_DATABASE_NORMAL_MIN_IDLE")
+	delete(env, "AJIASU_DATABASE_PLATFORM_MIN_IDLE")
+	applyEnvironment(t, env)
+
+	cfg, err := config.Load(os.LookupEnv)
+	if err != nil {
+		t.Fatalf("Load() legacy idle aliases error = %v", err)
+	}
+	if cfg.Database.Normal.MinIdleConnections != 4 || cfg.Database.Normal.MaxIdleConnections != 4 {
+		t.Fatalf("legacy normal database pool = %#v", cfg.Database.Normal)
+	}
+}
+
+func TestLoadRejectsConflictingIdleAliases(t *testing.T) {
+	env := validEnvironment(t)
+	env["AJIASU_DATABASE_NORMAL_MAX_IDLE"] = "3"
+	applyEnvironment(t, env)
+
+	_, err := config.Load(os.LookupEnv)
+	if err == nil {
+		t.Fatal("Load() accepted conflicting MIN_IDLE and MAX_IDLE aliases")
+	}
+	assertErrorNamesField(t, err, "AJIASU_DATABASE_NORMAL_MIN_IDLE")
 }
 
 func TestConfigLogValueRedactsSecrets(t *testing.T) {
@@ -294,10 +323,10 @@ func validEnvironment(t *testing.T) map[string]string {
 		"AJIASU_HTTP_SHUTDOWN_TIMEOUT":      "7s",
 		"AJIASU_DATABASE_NORMAL_DSN":        "postgres://normal:normal-password@localhost/normal",
 		"AJIASU_DATABASE_NORMAL_MAX_OPEN":   "8",
-		"AJIASU_DATABASE_NORMAL_MAX_IDLE":   "4",
+		"AJIASU_DATABASE_NORMAL_MIN_IDLE":   "4",
 		"AJIASU_DATABASE_PLATFORM_DSN":      "postgres://platform:platform-password@localhost/platform",
 		"AJIASU_DATABASE_PLATFORM_MAX_OPEN": "6",
-		"AJIASU_DATABASE_PLATFORM_MAX_IDLE": "3",
+		"AJIASU_DATABASE_PLATFORM_MIN_IDLE": "3",
 		"AJIASU_OIDC_ISSUER":                "https://issuer.example.test",
 		"AJIASU_OIDC_CLIENT_ID":             "control-plane",
 		"AJIASU_OIDC_CLIENT_SECRET_FILE":    clientSecret,

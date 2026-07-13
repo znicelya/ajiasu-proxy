@@ -55,18 +55,42 @@ function Invoke-NativeCommand {
     }
 }
 
+function Invoke-PowerShellScript {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    Write-Host "[control-plane-ci] command: & $Path"
+    try {
+        & $Path
+        Write-Host '[control-plane-ci] exit: 0'
+    }
+    catch {
+        Write-Host '[control-plane-ci] exit: 1'
+        throw
+    }
+}
+
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+$previousRequireDocker = $env:AJIASU_REQUIRE_DOCKER
 
 Push-Location -LiteralPath $repoRoot
 try {
-    Invoke-NativeCommand -FilePath 'go' -Arguments @('mod', 'tidy')
-    Invoke-NativeCommand -FilePath 'git' -Arguments @('diff', '--exit-code', '--', 'go.mod', 'go.sum')
-    Invoke-NativeCommand -FilePath 'git' -Arguments @('diff', '--cached', '--exit-code', '--', 'go.mod', 'go.sum')
+    Invoke-NativeCommand -FilePath 'go' -Arguments @('mod', 'tidy', '-diff')
+    Invoke-PowerShellScript -Path (Join-Path $repoRoot 'scripts/control-plane-ci.test.ps1')
+    Invoke-PowerShellScript -Path (Join-Path $repoRoot 'scripts/lock-control-plane-images.test.ps1')
+    Invoke-NativeCommand -FilePath 'go' -Arguments @('tool', 'sqlc', 'vet')
+    Invoke-NativeCommand -FilePath 'go' -Arguments @('tool', 'sqlc', 'diff')
 
+    $env:AJIASU_REQUIRE_DOCKER = '1'
     Invoke-NativeCommand -FilePath 'go' -Arguments @('test', '-race', './...')
     Invoke-NativeCommand -FilePath 'go' -Arguments @('vet', './...')
     Invoke-NativeCommand -FilePath 'go' -Arguments @('tool', 'staticcheck', './...')
 }
 finally {
+    if ($null -eq $previousRequireDocker) {
+        Remove-Item Env:AJIASU_REQUIRE_DOCKER -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:AJIASU_REQUIRE_DOCKER = $previousRequireDocker
+    }
     Pop-Location
 }
