@@ -58,6 +58,13 @@ func (s *Service) CreateTenant(ctx context.Context, actor PlatformActor, command
 	now := s.now().UTC()
 	var result Tenant
 	_, err = database.InPlatformTx(ctx, s.pools.Platform, actor.ActorID(), func(ctx context.Context, tx pgx.Tx) (struct{}, error) {
+		exists, err := userIdentityExists(ctx, tx, command.InitialAdminIdentityID)
+		if err != nil {
+			return struct{}{}, mapStorageError(err)
+		}
+		if !exists {
+			return struct{}{}, ErrInvalidArgument
+		}
 		row, err := createTenant(ctx, tx, tenantID, slug, strings.TrimSpace(command.Name), now)
 		if err != nil {
 			return struct{}{}, mapStorageError(err)

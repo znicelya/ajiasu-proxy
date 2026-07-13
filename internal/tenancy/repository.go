@@ -16,6 +16,10 @@ func createTenant(ctx context.Context, executor dbgen.DBTX, tenantID uuid.UUID, 
 	return dbgen.New(executor).CreateTenant(ctx, dbgen.CreateTenantParams{ID: tenantID, Slug: slug, Name: name, CreatedAt: now, UpdatedAt: now})
 }
 
+func userIdentityExists(ctx context.Context, executor dbgen.DBTX, identityID uuid.UUID) (bool, error) {
+	return dbgen.New(executor).UserIdentityExists(ctx, identityID)
+}
+
 func getTenant(ctx context.Context, executor dbgen.DBTX, tenantID uuid.UUID) (dbgen.TenancyTenant, error) {
 	return dbgen.New(executor).GetTenantByID(ctx, tenantID)
 }

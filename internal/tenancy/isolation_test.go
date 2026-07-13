@@ -97,7 +97,7 @@ func TestSixTenancyWritesAppendAuditAndOutbox(t *testing.T) {
 	tenant, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformSubject), tenancy.CreateTenant{
 		Slug:                   "six-writes",
 		Name:                   "Six Writes",
-		InitialAdminIdentityID: uuid.New(),
+		InitialAdminIdentityID: createUserIdentity(t, db.admin),
 	})
 	if err != nil {
 		t.Fatalf("CreateTenant() error = %v", err)
@@ -122,7 +122,7 @@ func TestSixTenancyWritesAppendAuditAndOutbox(t *testing.T) {
 	tenantSubject := tenantAdminSubject(tenant.ID)
 	member, err := service.AddMember(t.Context(), newTenantActor(t, tenantSubject, tenant.ID), tenancy.AddMember{
 		TenantID:   tenant.ID,
-		IdentityID: uuid.New(),
+		IdentityID: createUserIdentity(t, db.admin),
 	})
 	if err != nil {
 		t.Fatalf("AddMember() error = %v", err)
@@ -189,7 +189,7 @@ func TestUpdateTenantRejectsStaleVersionWithoutEvents(t *testing.T) {
 	db := startTenancyDatabase(t)
 	service := tenancy.NewService(db.pools, audit.NewService())
 	subject := platformAdminSubject()
-	tenant, err := service.CreateTenant(t.Context(), newPlatformActor(t, subject), tenancy.CreateTenant{Slug: "versioned", Name: "Versioned", InitialAdminIdentityID: uuid.New()})
+	tenant, err := service.CreateTenant(t.Context(), newPlatformActor(t, subject), tenancy.CreateTenant{Slug: "versioned", Name: "Versioned", InitialAdminIdentityID: createUserIdentity(t, db.admin)})
 	if err != nil {
 		t.Fatalf("CreateTenant() error = %v", err)
 	}
@@ -266,12 +266,12 @@ func TestSuspendedTenantRejectsTenantWrites(t *testing.T) {
 	db := startTenancyDatabase(t)
 	service := tenancy.NewService(db.pools, audit.NewService())
 	platformSubject := platformAdminSubject()
-	tenant, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformSubject), tenancy.CreateTenant{Slug: "suspended", Name: "Suspended", InitialAdminIdentityID: uuid.New()})
+	tenant, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformSubject), tenancy.CreateTenant{Slug: "suspended", Name: "Suspended", InitialAdminIdentityID: createUserIdentity(t, db.admin)})
 	if err != nil {
 		t.Fatalf("CreateTenant() error = %v", err)
 	}
 	tenantSubject := tenantAdminSubject(tenant.ID)
-	member, err := service.AddMember(t.Context(), newTenantActor(t, tenantSubject, tenant.ID), tenancy.AddMember{TenantID: tenant.ID, IdentityID: uuid.New()})
+	member, err := service.AddMember(t.Context(), newTenantActor(t, tenantSubject, tenant.ID), tenancy.AddMember{TenantID: tenant.ID, IdentityID: createUserIdentity(t, db.admin)})
 	if err != nil {
 		t.Fatalf("AddMember() setup error = %v", err)
 	}
@@ -346,12 +346,12 @@ func TestRemoveMemberCascadesRoleBindings(t *testing.T) {
 	db := startTenancyDatabase(t)
 	service := tenancy.NewService(db.pools, audit.NewService())
 	platformSubject := platformAdminSubject()
-	tenant, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformSubject), tenancy.CreateTenant{Slug: "cascade", Name: "Cascade", InitialAdminIdentityID: uuid.New()})
+	tenant, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformSubject), tenancy.CreateTenant{Slug: "cascade", Name: "Cascade", InitialAdminIdentityID: createUserIdentity(t, db.admin)})
 	if err != nil {
 		t.Fatalf("CreateTenant() error = %v", err)
 	}
 	tenantSubject := tenantAdminSubject(tenant.ID)
-	member, err := service.AddMember(t.Context(), newTenantActor(t, tenantSubject, tenant.ID), tenancy.AddMember{TenantID: tenant.ID, IdentityID: uuid.New()})
+	member, err := service.AddMember(t.Context(), newTenantActor(t, tenantSubject, tenant.ID), tenancy.AddMember{TenantID: tenant.ID, IdentityID: createUserIdentity(t, db.admin)})
 	if err != nil {
 		t.Fatalf("AddMember() error = %v", err)
 	}
@@ -379,7 +379,7 @@ func TestRemoveMemberCascadesRoleBindings(t *testing.T) {
 func TestCannotRemoveOrRevokeLastTenantAdmin(t *testing.T) {
 	db := startTenancyDatabase(t)
 	service := tenancy.NewService(db.pools, audit.NewService())
-	initialAdminIdentityID := uuid.New()
+	initialAdminIdentityID := createUserIdentity(t, db.admin)
 	tenant, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformAdminSubject()), tenancy.CreateTenant{Slug: "last-admin", Name: "Last Admin", InitialAdminIdentityID: initialAdminIdentityID})
 	if err != nil {
 		t.Fatalf("CreateTenant() error = %v", err)
@@ -423,7 +423,7 @@ func TestTenantLifecycleAndWritesShareSerializationLock(t *testing.T) {
 	db := startTenancyDatabase(t)
 	service := tenancy.NewService(db.pools, audit.NewService())
 	platformSubject := platformAdminSubject()
-	tenant, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformSubject), tenancy.CreateTenant{Slug: "serialized", Name: "Serialized", InitialAdminIdentityID: uuid.New()})
+	tenant, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformSubject), tenancy.CreateTenant{Slug: "serialized", Name: "Serialized", InitialAdminIdentityID: createUserIdentity(t, db.admin)})
 	if err != nil {
 		t.Fatalf("CreateTenant() error = %v", err)
 	}
@@ -462,21 +462,21 @@ func TestTenancyRLSIsolatesTenantsAndConnectionReuse(t *testing.T) {
 	}
 	service := tenancy.NewService(db.pools, audit.NewService())
 	platformSubject := platformAdminSubject()
-	tenantA, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformSubject), tenancy.CreateTenant{Slug: "tenant-a", Name: "Tenant A", InitialAdminIdentityID: uuid.New()})
+	tenantA, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformSubject), tenancy.CreateTenant{Slug: "tenant-a", Name: "Tenant A", InitialAdminIdentityID: createUserIdentity(t, db.admin)})
 	if err != nil {
 		t.Fatalf("create Tenant A: %v", err)
 	}
-	tenantB, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformSubject), tenancy.CreateTenant{Slug: "tenant-b", Name: "Tenant B", InitialAdminIdentityID: uuid.New()})
+	tenantB, err := service.CreateTenant(t.Context(), newPlatformActor(t, platformSubject), tenancy.CreateTenant{Slug: "tenant-b", Name: "Tenant B", InitialAdminIdentityID: createUserIdentity(t, db.admin)})
 	if err != nil {
 		t.Fatalf("create Tenant B: %v", err)
 	}
 	actorA := tenantAdminSubject(tenantA.ID)
 	actorB := tenantAdminSubject(tenantB.ID)
-	memberA, err := service.AddMember(t.Context(), newTenantActor(t, actorA, tenantA.ID), tenancy.AddMember{TenantID: tenantA.ID, IdentityID: uuid.New()})
+	memberA, err := service.AddMember(t.Context(), newTenantActor(t, actorA, tenantA.ID), tenancy.AddMember{TenantID: tenantA.ID, IdentityID: createUserIdentity(t, db.admin)})
 	if err != nil {
 		t.Fatalf("add Tenant A member: %v", err)
 	}
-	memberB, err := service.AddMember(t.Context(), newTenantActor(t, actorB, tenantB.ID), tenancy.AddMember{TenantID: tenantB.ID, IdentityID: uuid.New()})
+	memberB, err := service.AddMember(t.Context(), newTenantActor(t, actorB, tenantB.ID), tenancy.AddMember{TenantID: tenantB.ID, IdentityID: createUserIdentity(t, db.admin)})
 	if err != nil {
 		t.Fatalf("add Tenant B member: %v", err)
 	}
@@ -569,6 +569,19 @@ SELECT pg_advisory_xact_lock(hashtextextended('ajiasu-tenant:' || $1::uuid::text
 			t.Fatalf("release tenant advisory lock: %v", err)
 		}
 	}
+}
+
+func createUserIdentity(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	now := time.Now().UTC()
+	if _, err := pool.Exec(t.Context(), `
+INSERT INTO identity.user_identities (id, disabled_at, version, created_at, updated_at)
+VALUES ($1, NULL, 1, $2, $2)
+`, id, now); err != nil {
+		t.Fatalf("create tenancy-test user identity: %v", err)
+	}
+	return id
 }
 
 func platformAdminSubject() tenancy.Subject {

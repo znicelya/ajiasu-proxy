@@ -50,7 +50,7 @@ func (q *Queries) CountTenantAdminBindingsForMembership(ctx context.Context, arg
 const createMembership = `-- name: CreateMembership :one
 INSERT INTO tenancy.memberships (id, tenant_id, identity_id, version, created_at, updated_at)
 VALUES ($1, $2, $3, 1, $4, $5)
-RETURNING id, tenant_id, identity_id, version, created_at, updated_at
+RETURNING id, tenant_id, identity_id, version, created_at, updated_at, identity_tenant_eligible
 `
 
 type CreateMembershipParams struct {
@@ -77,6 +77,7 @@ func (q *Queries) CreateMembership(ctx context.Context, arg CreateMembershipPara
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IdentityTenantEligible,
 	)
 	return i, err
 }
@@ -178,7 +179,8 @@ func (q *Queries) DeleteRoleBinding(ctx context.Context, id uuid.UUID) (int64, e
 }
 
 const getMembershipByID = `-- name: GetMembershipByID :one
-SELECT id, tenant_id, identity_id, version, created_at, updated_at FROM tenancy.memberships WHERE id = $1
+SELECT id, tenant_id, identity_id, version, created_at, updated_at, identity_tenant_eligible
+FROM tenancy.memberships WHERE id = $1
 `
 
 func (q *Queries) GetMembershipByID(ctx context.Context, id uuid.UUID) (TenancyMembership, error) {
@@ -191,6 +193,7 @@ func (q *Queries) GetMembershipByID(ctx context.Context, id uuid.UUID) (TenancyM
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IdentityTenantEligible,
 	)
 	return i, err
 }
@@ -288,4 +291,18 @@ func (q *Queries) UpdateTenant(ctx context.Context, arg UpdateTenantParams) (Ten
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const userIdentityExists = `-- name: UserIdentityExists :one
+SELECT EXISTS (
+    SELECT 1 FROM identity.user_identities
+    WHERE id = $1 AND tenant_eligible = true
+)
+`
+
+func (q *Queries) UserIdentityExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, userIdentityExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }

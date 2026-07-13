@@ -23,6 +23,12 @@ func (pendingDatabaseReadiness) Check(context.Context) error {
 }
 
 func main() {
+	if handled, exitCode := runAdminCLI(os.Args[1:], os.LookupEnv, os.Stdin, os.Stdout, os.Stderr); handled {
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+		return
+	}
 	baseLogger := logging.NewJSON(os.Stdout, slog.LevelInfo)
 	logger := baseLogger.With(slog.String("component", "control-plane"))
 	cfg, err := config.Load(os.LookupEnv)
