@@ -18,6 +18,12 @@ function Format-Command {
     return (@($FilePath) + $displayArguments) -join ' '
 }
 
+function ConvertTo-UnixNewlines {
+    param([Parameter(Mandatory = $true)][string] $Text)
+
+    return $Text.Replace("`r`n", "`n").Replace("`r", "`n")
+}
+
 function Invoke-NativeCommand {
     param(
         [Parameter(Mandatory = $true)][string] $FilePath,
@@ -143,6 +149,7 @@ apk add --no-cache curl tar coreutils openssl
 /bin/sh runner/tests/fetch-ajiasu.test.sh
 /bin/sh runner/tests/entrypoint.test.sh
 '@
+$shellTests = ConvertTo-UnixNewlines -Text $shellTests
 $fakeContract = @'
 set -eu
 umask 077
@@ -151,6 +158,7 @@ AJIASU_BIN=/workspace/runner/testdata/fake-ajiasu.sh \
 AJIASU_CONFIG=/tmp/ajiasu.conf \
     /bin/sh /workspace/tests/contract/ajiasu-contract.sh
 '@
+$fakeContract = ConvertTo-UnixNewlines -Text $fakeContract
 
 Push-Location -LiteralPath $repoRoot
 try {
