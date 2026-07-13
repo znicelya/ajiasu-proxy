@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -38,6 +39,87 @@ func TestLoadRejectsInsecureProductionCookie(t *testing.T) {
 
 	_, err := config.Load(os.LookupEnv)
 	assertErrorNamesField(t, err, "AJIASU_SESSION_COOKIE_SECURE")
+}
+
+func TestLoadRejectsInvalidOIDCURLs(t *testing.T) {
+	tests := []struct {
+		name  string
+		field string
+		value string
+	}{
+		{name: "relative issuer", field: "AJIASU_OIDC_ISSUER", value: "/tenant"},
+		{name: "issuer without host", field: "AJIASU_OIDC_ISSUER", value: "https:///tenant"},
+		{name: "unsupported issuer scheme", field: "AJIASU_OIDC_ISSUER", value: "ftp://issuer.example.test"},
+		{name: "relative redirect", field: "AJIASU_OIDC_REDIRECT_URL", value: "/callback"},
+		{name: "redirect without host", field: "AJIASU_OIDC_REDIRECT_URL", value: "https:///callback"},
+		{name: "unsupported redirect scheme", field: "AJIASU_OIDC_REDIRECT_URL", value: "javascript://callback.example.test"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := validEnvironment(t)
+			env[tt.field] = tt.value
+			applyEnvironment(t, env)
+
+			_, err := config.Load(os.LookupEnv)
+			assertErrorNamesField(t, err, tt.field)
+		})
+	}
+}
+
+func TestLoadRejectsInsecureProductionOIDCURLs(t *testing.T) {
+	for _, field := range []string{"AJIASU_OIDC_ISSUER", "AJIASU_OIDC_REDIRECT_URL"} {
+		t.Run(field, func(t *testing.T) {
+			env := validEnvironment(t)
+			env["AJIASU_ENVIRONMENT"] = "production"
+			env["AJIASU_SESSION_COOKIE_SECURE"] = "true"
+			env[field] = "http://oidc.example.test/path"
+			applyEnvironment(t, env)
+
+			_, err := config.Load(os.LookupEnv)
+			assertErrorNamesField(t, err, field)
+		})
+	}
+}
+
+func TestLoadRejectsInvalidCIDR(t *testing.T) {
+	env := validEnvironment(t)
+	env["AJIASU_LOCAL_AUTH_ALLOWED_CIDRS"] = "127.0.0.0/8,not-a-cidr"
+	applyEnvironment(t, env)
+
+	_, err := config.Load(os.LookupEnv)
+	assertErrorNamesField(t, err, "AJIASU_LOCAL_AUTH_ALLOWED_CIDRS")
+}
+
+func TestLoadRejectsInvalidDuration(t *testing.T) {
+	env := validEnvironment(t)
+	env["AJIASU_HTTP_READ_TIMEOUT"] = "eventually"
+	applyEnvironment(t, env)
+
+	_, err := config.Load(os.LookupEnv)
+	assertErrorNamesField(t, err, "AJIASU_HTTP_READ_TIMEOUT")
+}
+
+func TestLoadRejectsMissingOIDCClientSecret(t *testing.T) {
+	env := validEnvironment(t)
+	env["AJIASU_OIDC_CLIENT_SECRET_FILE"] = ""
+	applyEnvironment(t, env)
+
+	_, err := config.Load(os.LookupEnv)
+	assertErrorNamesField(t, err, "AJIASU_OIDC_CLIENT_SECRET_FILE")
+}
+
+func TestLoadErrorsDoNotEchoInvalidValues(t *testing.T) {
+	const canary = "secret-url-canary-7f9b1"
+	env := validEnvironment(t)
+	env["AJIASU_OIDC_ISSUER"] = "://" + canary
+	applyEnvironment(t, env)
+
+	_, err := config.Load(os.LookupEnv)
+	assertErrorNamesField(t, err, "AJIASU_OIDC_ISSUER")
+	if strings.Contains(err.Error(), canary) {
+		t.Fatalf("Load() error exposed invalid value: %q", err)
+	}
 }
 
 func TestLoadRejectsInvalidKeyringFile(t *testing.T) {
@@ -126,6 +208,34 @@ func TestConfigLogValueRedactsSecrets(t *testing.T) {
 			t.Errorf("log does not contain safe value %q: %s", safeField, output.String())
 		}
 	}
+}
+
+func TestConfigStringRedactsSecrets(t *testing.T) {
+	env := validEnvironment(t)
+	applyEnvironment(t, env)
+	cfg, err := config.Load(os.LookupEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, formatted := range []string{formatAsString(cfg), fmt.Sprintf("%v", cfg)} {
+		for _, secret := range []string{
+			"normal-password",
+			"platform-password",
+			cfg.OIDC.ClientSecretFile,
+			"session-cookie",
+			cfg.KeyringFile,
+			"0123456789abcdef0123456789abcdef",
+		} {
+			if strings.Contains(formatted, secret) {
+				t.Errorf("Config string contains secret %q: %s", secret, formatted)
+			}
+		}
+	}
+}
+
+func formatAsString(value any) string {
+	return fmt.Sprintf("%s", value)
 }
 
 func validEnvironment(t *testing.T) map[string]string {

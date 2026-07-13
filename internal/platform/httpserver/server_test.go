@@ -73,7 +73,7 @@ func TestReadyzRedactsFailureAndReportsRecovery(t *testing.T) {
 	}
 }
 
-func TestRequestIDIsReturnedAndAvailableFromContext(t *testing.T) {
+func TestRequestIDIsReturnedAndLogged(t *testing.T) {
 	tests := []struct {
 		name     string
 		supplied string
@@ -83,12 +83,9 @@ func TestRequestIDIsReturnedAndAvailableFromContext(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var contextID string
-			handler := requestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				contextID = requestctx.RequestID(r.Context())
-				w.WriteHeader(http.StatusNoContent)
-			}))
-			request := httptest.NewRequest(http.MethodGet, "/", nil)
+			var logs bytes.Buffer
+			handler := NewRouter(Dependencies{Logger: testLogger(&logs)})
+			request := httptest.NewRequest(http.MethodGet, "/livez", nil)
 			if tt.supplied != "" {
 				request.Header.Set("X-Request-ID", tt.supplied)
 			}
@@ -97,11 +94,29 @@ func TestRequestIDIsReturnedAndAvailableFromContext(t *testing.T) {
 			handler.ServeHTTP(response, request)
 
 			returned := response.Header().Get("X-Request-ID")
-			if returned == "" || returned != contextID {
-				t.Fatalf("returned ID = %q, context ID = %q", returned, contextID)
+			if returned == "" {
+				t.Fatal("response request ID is empty")
 			}
 			if tt.supplied != "" && returned != tt.supplied {
 				t.Fatalf("returned ID = %q, want %q", returned, tt.supplied)
+			}
+
+			var accessLog map[string]any
+			for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+				var entry map[string]any
+				if err := json.Unmarshal([]byte(line), &entry); err != nil {
+					t.Fatalf("invalid JSON log: %v: %s", err, line)
+				}
+				if entry["msg"] == "request_completed" {
+					accessLog = entry
+					break
+				}
+			}
+			if accessLog == nil {
+				t.Fatalf("request_completed log not found: %s", logs.String())
+			}
+			if logged, _ := accessLog["request_id"].(string); logged != returned {
+				t.Fatalf("logged request ID = %q, returned ID = %q", logged, returned)
 			}
 		})
 	}

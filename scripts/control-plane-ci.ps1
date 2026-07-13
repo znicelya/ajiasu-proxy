@@ -55,29 +55,12 @@ function Invoke-NativeCommand {
     }
 }
 
-function Get-FileDigest {
-    param([Parameter(Mandatory = $true)][string] $Path)
-
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        return '<missing>'
-    }
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
-}
-
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$goModPath = Join-Path $repoRoot 'go.mod'
-$goSumPath = Join-Path $repoRoot 'go.sum'
 
 Push-Location -LiteralPath $repoRoot
 try {
-    $goModBefore = Get-FileDigest -Path $goModPath
-    $goSumBefore = Get-FileDigest -Path $goSumPath
     Invoke-NativeCommand -FilePath 'go' -Arguments @('mod', 'tidy')
-    $goModAfter = Get-FileDigest -Path $goModPath
-    $goSumAfter = Get-FileDigest -Path $goSumPath
-    if ($goModBefore -ne $goModAfter -or $goSumBefore -ne $goSumAfter) {
-        throw 'go mod tidy changed go.mod or go.sum; run it and commit the result'
-    }
+    Invoke-NativeCommand -FilePath 'git' -Arguments @('diff', '--exit-code', '--', 'go.mod', 'go.sum')
 
     Invoke-NativeCommand -FilePath 'go' -Arguments @('test', '-race', './...')
     Invoke-NativeCommand -FilePath 'go' -Arguments @('vet', './...')

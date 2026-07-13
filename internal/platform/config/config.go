@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/netip"
+	"net/url"
 	"os"
 	"runtime"
 	"strconv"
@@ -94,7 +95,7 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	oidc, err := l.loadOIDC()
+	oidc, err := l.loadOIDC(environment)
 	if err != nil {
 		return Config{}, err
 	}
@@ -162,6 +163,15 @@ func (c Config) LogValue() slog.Value {
 	)
 }
 
+func (c Config) String() string {
+	return fmt.Sprintf(
+		"Config{environment=%q,http_bind=%q,database=[redacted],oidc=[redacted],session=[redacted],keyring_file=[redacted],local_auth_enabled=%t}",
+		c.Environment,
+		c.HTTP.Bind,
+		c.LocalAuth.Enabled,
+	)
+}
+
 func (l loader) loadHTTP() (HTTP, error) {
 	bind, err := l.required("AJIASU_HTTP_BIND")
 	if err != nil {
@@ -222,10 +232,13 @@ func (l loader) databasePool(name string) (DatabasePool, error) {
 	return DatabasePool{DSN: dsn, MaxOpenConnections: maxOpen, MaxIdleConnections: maxIdle}, nil
 }
 
-func (l loader) loadOIDC() (OIDC, error) {
+func (l loader) loadOIDC(environment Environment) (OIDC, error) {
 	issuer, err := l.required("AJIASU_OIDC_ISSUER")
 	if err != nil {
 		return OIDC{}, err
+	}
+	if err := validateHTTPURL(issuer, environment); err != nil {
+		return OIDC{}, fieldError("AJIASU_OIDC_ISSUER", err.Error())
 	}
 	clientID, err := l.required("AJIASU_OIDC_CLIENT_ID")
 	if err != nil {
@@ -242,7 +255,25 @@ func (l loader) loadOIDC() (OIDC, error) {
 	if err != nil {
 		return OIDC{}, err
 	}
+	if err := validateHTTPURL(redirectURL, environment); err != nil {
+		return OIDC{}, fieldError("AJIASU_OIDC_REDIRECT_URL", err.Error())
+	}
 	return OIDC{Issuer: issuer, ClientID: clientID, ClientSecretFile: clientSecretFile, RedirectURL: redirectURL}, nil
+}
+
+func validateHTTPURL(value string, environment Environment) error {
+	parsed, err := url.Parse(value)
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
+		return fmt.Errorf("must be an absolute HTTP or HTTPS URL with a host")
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("must be an absolute HTTP or HTTPS URL with a host")
+	}
+	if environment == EnvironmentProduction && scheme != "https" {
+		return fmt.Errorf("must use HTTPS in production")
+	}
+	return nil
 }
 
 func (l loader) loadSession() (Session, error) {
