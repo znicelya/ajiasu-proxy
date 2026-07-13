@@ -6,11 +6,13 @@
 
 **Architecture:** A vertical-slice Go modular monolith uses `chi`, `pgx`, and `sqlc`. PostgreSQL is authoritative for business state, sessions, idempotency, audit, and Outbox state; tenant repositories require server-derived transaction context and forced RLS. Browser users authenticate through server-side sessions, while automation uses short-lived opaque service tokens.
 
-**Tech Stack:** Go 1.25.3, chi 5.3.1, pgx 5.10.0, sqlc 1.31.1, Goose 3.27.2, PostgreSQL 17, Keycloak 26, OpenAPI 3.1, Testcontainers Go 0.43.0, OpenTelemetry 1.44.0, Prometheus client 1.23.2
+**Tech Stack:** Go 1.25.3, chi 5.3.1, pgx 5.10.0, sqlc 1.30.0, Goose 3.26.0, PostgreSQL 17, Keycloak 26, OpenAPI 3.1, Testcontainers Go 0.43.0, OpenTelemetry 1.44.0, Prometheus client 1.23.2
 
 ---
 
 ## Execution Rules
+
+> **Approved compatibility amendment (2026-07-13):** Keep the project at Go 1.25.0 with toolchain Go 1.25.3. Pin sqlc to v1.30.0 and Goose to v3.26.0 because sqlc v1.31.1 requires Go 1.26.0 and Goose v3.27.2 requires Go 1.25.7. This amendment preserves the approved Go build image and was explicitly selected by the user during Task 1 execution.
 
 - Work in a new worktree on branch `feat/phase-2-control-plane`.
 - Follow strict test-driven development for every behavior change.
@@ -43,8 +45,8 @@ golang.org/x/oauth2 v0.36.0
 Tool dependencies:
 
 ```text
-github.com/pressly/goose/v3/cmd/goose v3.27.2
-github.com/sqlc-dev/sqlc/cmd/sqlc v1.31.1
+github.com/pressly/goose/v3/cmd/goose v3.26.0
+github.com/sqlc-dev/sqlc/cmd/sqlc v1.30.0
 honnef.co/go/tools/cmd/staticcheck v0.7.0
 ```
 
@@ -138,8 +140,8 @@ import (
 Pin tools:
 
 ```powershell
-go get -tool github.com/pressly/goose/v3/cmd/goose@v3.27.2
-go get -tool github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+go get -tool github.com/pressly/goose/v3/cmd/goose@v3.26.0
+go get -tool github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0
 go get -tool honnef.co/go/tools/cmd/staticcheck@v0.7.0
 go mod tidy
 ```

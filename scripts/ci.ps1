@@ -184,6 +184,8 @@ try {
         '--workdir', '/workspace', $alpineImage,
         '/bin/sh', '-c', $fakeContract
     )
+
+    Invoke-PowerShellScript -Path (Join-Path $repoRoot 'scripts/control-plane-ci.ps1')
 }
 finally {
     Pop-Location
