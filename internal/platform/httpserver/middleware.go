@@ -3,12 +3,15 @@ package httpserver
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"strings"
+	"regexp"
+	"sync/atomic"
 	"time"
 
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/requestctx"
@@ -16,10 +19,17 @@ import (
 
 const maxRequestBodyBytes = 1 << 20
 
+const requestIDLength = 36
+
+var (
+	requestIDPattern  = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	requestIDFallback atomic.Uint64
+)
+
 func requestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := strings.TrimSpace(r.Header.Get("X-Request-ID"))
-		if requestID == "" {
+		requestID := r.Header.Get("X-Request-ID")
+		if !validRequestID(requestID) {
 			requestID = newRequestID()
 		}
 		w.Header().Set("X-Request-ID", requestID)
@@ -60,16 +70,26 @@ func accessLogMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			started := time.Now()
 			wrapped := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+			logCompletion := func() {
+				logger.InfoContext(r.Context(), "request_completed",
+					slog.String("component", "httpserver"),
+					slog.String("request_id", requestctx.RequestID(r.Context())),
+					slog.String("client_ip", requestctx.ClientIP(r.Context())),
+					slog.String("method", r.Method),
+					slog.String("path", r.URL.Path),
+					slog.Int("status", wrapped.status),
+					slog.Duration("duration", time.Since(started)),
+				)
+			}
+			defer func() {
+				if panicValue := recover(); panicValue != nil {
+					wrapped.status = http.StatusInternalServerError
+					logCompletion()
+					panic(panicValue)
+				}
+			}()
 			next.ServeHTTP(wrapped, r)
-			logger.InfoContext(r.Context(), "request_completed",
-				slog.String("component", "httpserver"),
-				slog.String("request_id", requestctx.RequestID(r.Context())),
-				slog.String("client_ip", requestctx.ClientIP(r.Context())),
-				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
-				slog.Int("status", wrapped.status),
-				slog.Duration("duration", time.Since(started)),
-			)
+			logCompletion()
 		})
 	}
 }
@@ -117,10 +137,22 @@ func (w *statusWriter) Write(body []byte) (int, error) {
 	return w.ResponseWriter.Write(body)
 }
 
+func (w *statusWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+func validRequestID(requestID string) bool {
+	return len(requestID) == requestIDLength && requestIDPattern.MatchString(requestID)
+}
+
 func newRequestID() string {
 	var value [16]byte
-	if _, err := rand.Read(value[:]); err == nil {
-		return hex.EncodeToString(value[:])
+	if _, err := io.ReadFull(rand.Reader, value[:]); err != nil {
+		fallback := sha256.Sum256([]byte(fmt.Sprintf("%d-%d", time.Now().UnixNano(), requestIDFallback.Add(1))))
+		copy(value[:], fallback[:16])
 	}
-	return strings.ReplaceAll(time.Now().UTC().Format("20060102T150405.000000000"), ".", "")
+	value[6] = value[6]&0x0f | 0x40
+	value[8] = value[8]&0x3f | 0x80
+	encoded := hex.EncodeToString(value[:])
+	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:32]
 }

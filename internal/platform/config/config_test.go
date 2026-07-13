@@ -109,6 +109,40 @@ func TestLoadRejectsMissingOIDCClientSecret(t *testing.T) {
 	assertErrorNamesField(t, err, "AJIASU_OIDC_CLIENT_SECRET_FILE")
 }
 
+func TestLoadRejectsInvalidOIDCClientSecretFile(t *testing.T) {
+	tests := []struct {
+		name    string
+		content []byte
+		useDir  bool
+	}{
+		{name: "empty"},
+		{name: "whitespace", content: []byte(" \r\n\t")},
+		{name: "directory", useDir: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := validEnvironment(t)
+			path := filepath.Join(t.TempDir(), "client-secret")
+			if tt.useDir {
+				if err := os.Mkdir(path, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(path, tt.content, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			env["AJIASU_OIDC_CLIENT_SECRET_FILE"] = path
+			applyEnvironment(t, env)
+
+			_, err := config.Load(os.LookupEnv)
+			assertErrorNamesField(t, err, "AJIASU_OIDC_CLIENT_SECRET_FILE")
+			if strings.Contains(fmt.Sprint(err), path) {
+				t.Fatalf("Load() error exposed secret path: %q", err)
+			}
+		})
+	}
+}
+
 func TestLoadErrorsDoNotEchoInvalidValues(t *testing.T) {
 	const canary = "secret-url-canary-7f9b1"
 	env := validEnvironment(t)

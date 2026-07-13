@@ -61,6 +61,7 @@ Push-Location -LiteralPath $repoRoot
 try {
     Invoke-NativeCommand -FilePath 'go' -Arguments @('mod', 'tidy')
     Invoke-NativeCommand -FilePath 'git' -Arguments @('diff', '--exit-code', '--', 'go.mod', 'go.sum')
+    Invoke-NativeCommand -FilePath 'git' -Arguments @('diff', '--cached', '--exit-code', '--', 'go.mod', 'go.sum')
 
     Invoke-NativeCommand -FilePath 'go' -Arguments @('test', '-race', './...')
     Invoke-NativeCommand -FilePath 'go' -Arguments @('vet', './...')

@@ -1,7 +1,9 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/netip"
 	"net/url"
@@ -248,7 +250,7 @@ func (l loader) loadOIDC(environment Environment) (OIDC, error) {
 	if err != nil {
 		return OIDC{}, err
 	}
-	if err := validateRegularFile(clientSecretFile); err != nil {
+	if err := validateClientSecretFile(clientSecretFile); err != nil {
 		return OIDC{}, fieldError("AJIASU_OIDC_CLIENT_SECRET_FILE", err.Error())
 	}
 	redirectURL, err := l.required("AJIASU_OIDC_REDIRECT_URL")
@@ -386,32 +388,48 @@ func (l loader) integer(name string) (int, error) {
 	return result, nil
 }
 
-func validateRegularFile(path string) error {
-	info, err := os.Stat(path)
+func validateClientSecretFile(path string) error {
+	content, _, err := readRegularFile(path, 64*1024+1)
 	if err != nil {
 		return fmt.Errorf("must identify an accessible regular file")
 	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("must identify a regular file")
+	defer clear(content)
+	if len(content) > 64*1024 || len(bytes.TrimSpace(content)) == 0 {
+		return fmt.Errorf("must contain a nonempty client secret")
 	}
 	return nil
 }
 
 func validateKeyringFile(path string) error {
-	if err := validateRegularFile(path); err != nil {
-		return err
-	}
-	info, err := os.Stat(path)
+	content, info, err := readRegularFile(path, 33)
 	if err != nil {
 		return fmt.Errorf("must identify an accessible regular file")
 	}
-	if info.Size() != 32 {
+	defer clear(content)
+	if len(content) != 32 {
 		return fmt.Errorf("must be exactly 32 bytes")
 	}
 	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		return fmt.Errorf("must not be accessible by group or other users")
 	}
 	return nil
+}
+
+func readRegularFile(path string, limit int64) ([]byte, os.FileInfo, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, nil, fmt.Errorf("not a readable regular file")
+	}
+	content, err := io.ReadAll(io.LimitReader(file, limit))
+	if err != nil {
+		return nil, nil, err
+	}
+	return content, info, nil
 }
 
 func fieldError(name, reason string) error {

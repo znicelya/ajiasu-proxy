@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -74,13 +75,23 @@ func TestReadyzRedactsFailureAndReportsRecovery(t *testing.T) {
 }
 
 func TestRequestIDIsReturnedAndLogged(t *testing.T) {
+	const validUUID = "123e4567-e89b-42d3-a456-426614174000"
+	const validUUIDv7 = "0190a5f0-7b2c-7f31-8e2a-1d4c6b8a9f00"
 	tests := []struct {
-		name     string
-		supplied string
+		name             string
+		supplied         string
+		preserveSupplied bool
+		rejectedValue    string
 	}{
-		{name: "supplied", supplied: "req-123"},
+		{name: "canonical UUID", supplied: validUUID, preserveSupplied: true},
+		{name: "canonical UUIDv7", supplied: validUUIDv7, preserveSupplied: true},
 		{name: "generated"},
+		{name: "too long", supplied: strings.Repeat("a", 200)},
+		{name: "control character", supplied: validUUID + "\nspoofed"},
+		{name: "surrounding whitespace", supplied: " " + validUUID + " ", rejectedValue: validUUID},
+		{name: "unsafe characters", supplied: "request/id?secret=true"},
 	}
+	uuidPattern := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var logs bytes.Buffer
@@ -97,8 +108,17 @@ func TestRequestIDIsReturnedAndLogged(t *testing.T) {
 			if returned == "" {
 				t.Fatal("response request ID is empty")
 			}
-			if tt.supplied != "" && returned != tt.supplied {
+			if !uuidPattern.MatchString(returned) {
+				t.Fatalf("returned request ID is not a canonical UUID: %q", returned)
+			}
+			if tt.preserveSupplied && returned != tt.supplied {
 				t.Fatalf("returned ID = %q, want %q", returned, tt.supplied)
+			}
+			if tt.supplied != "" && !tt.preserveSupplied && returned == tt.supplied {
+				t.Fatalf("invalid supplied ID was echoed: %q", returned)
+			}
+			if tt.rejectedValue != "" && returned == tt.rejectedValue {
+				t.Fatalf("invalid supplied ID was normalized instead of replaced: %q", returned)
 			}
 
 			var accessLog map[string]any
@@ -137,12 +157,16 @@ func TestDirectPeerIPIsAvailableWithoutTrustingForwardedHeaders(t *testing.T) {
 }
 
 func TestPanicRecoveryHidesPanicAndLogsRequestID(t *testing.T) {
+	const requestID = "123e4567-e89b-42d3-a456-426614174000"
 	var logs bytes.Buffer
-	handler := requestIDMiddleware(recoveryMiddleware(testLogger(&logs))(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		panic("sensitive panic detail")
-	})))
-	request := httptest.NewRequest(http.MethodGet, "/panic", nil)
-	request.Header.Set("X-Request-ID", "panic-request")
+	handler := NewRouter(Dependencies{
+		Logger: testLogger(&logs),
+		Readiness: readinessFunc(func(context.Context) error {
+			panic("sensitive panic detail")
+		}),
+	})
+	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	request.Header.Set("X-Request-ID", requestID)
 	response := httptest.NewRecorder()
 
 	handler.ServeHTTP(response, request)
@@ -153,11 +177,33 @@ func TestPanicRecoveryHidesPanicAndLogsRequestID(t *testing.T) {
 	if strings.Contains(response.Body.String(), "sensitive panic detail") {
 		t.Fatalf("response leaked panic: %s", response.Body.String())
 	}
-	if !strings.Contains(logs.String(), "panic-request") || !strings.Contains(logs.String(), "panic_recovered") {
-		t.Fatalf("log missing safe panic correlation: %s", logs.String())
-	}
 	if strings.Contains(logs.String(), "sensitive panic detail") {
 		t.Fatalf("log contains panic value: %s", logs.String())
+	}
+
+	entries := parseJSONLogs(t, logs.String())
+	panicked := filterLogs(entries, "panic_recovered")
+	completed := filterLogs(entries, "request_completed")
+	if len(panicked) != 1 || len(completed) != 1 {
+		t.Fatalf("panic logs = %d, completed logs = %d: %s", len(panicked), len(completed), logs.String())
+	}
+	if panicked[0]["request_id"] != requestID || completed[0]["request_id"] != requestID {
+		t.Fatalf("request IDs do not match: panicked=%v completed=%v", panicked[0]["request_id"], completed[0]["request_id"])
+	}
+	if completed[0]["status"] != float64(http.StatusInternalServerError) {
+		t.Fatalf("completed status = %v, want 500", completed[0]["status"])
+	}
+}
+
+func TestStatusWriterPreservesResponseControllerCapabilities(t *testing.T) {
+	underlying := httptest.NewRecorder()
+	wrapper := &statusWriter{ResponseWriter: underlying, status: http.StatusOK}
+
+	if err := http.NewResponseController(wrapper).Flush(); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+	if !underlying.Flushed {
+		t.Fatal("underlying response writer was not flushed")
 	}
 }
 
@@ -218,4 +264,30 @@ func assertErrorEnvelope(t *testing.T, body []byte, code, message, requestID str
 
 func testLogger(writer io.Writer) *slog.Logger {
 	return slog.New(slog.NewJSONHandler(writer, nil))
+}
+
+func parseJSONLogs(t *testing.T, output string) []map[string]any {
+	t.Helper()
+	var entries []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		if line == "" {
+			continue
+		}
+		var entry map[string]any
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("invalid JSON log: %v: %s", err, line)
+		}
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+func filterLogs(entries []map[string]any, message string) []map[string]any {
+	var matches []map[string]any
+	for _, entry := range entries {
+		if entry["msg"] == message {
+			matches = append(matches, entry)
+		}
+	}
+	return matches
 }
