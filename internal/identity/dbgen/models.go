@@ -11,6 +11,19 @@ import (
 	"github.com/google/uuid"
 )
 
+type IdentityAuthSession struct {
+	ID                uuid.UUID
+	IdentityID        uuid.UUID
+	TokenDigest       []byte
+	CsrfDigest        []byte
+	IssuedAt          time.Time
+	LastUsedAt        time.Time
+	IdleExpiresAt     time.Time
+	AbsoluteExpiresAt time.Time
+	RevokedAt         *time.Time
+	Version           int64
+}
+
 type IdentityLocalAdmin struct {
 	IdentityID          uuid.UUID
 	TenantEligible      bool
@@ -43,6 +56,29 @@ type IdentityLocalRecoveryCode struct {
 	Verifier   string
 	UsedAt     *time.Time
 	CreatedAt  time.Time
+}
+
+type IdentityOidcAuthTransaction struct {
+	ID                     uuid.UUID
+	StateDigest            []byte
+	BindingDigest          []byte
+	NonceDigest            []byte
+	PkceVerifierCiphertext []byte
+	ReturnPath             string
+	ExpiresAt              time.Time
+	ConsumedAt             *time.Time
+	CreatedAt              time.Time
+}
+
+type IdentityOidcIdentity struct {
+	ID          uuid.UUID
+	IdentityID  uuid.UUID
+	Issuer      string
+	Subject     string
+	Email       string
+	DisplayName string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type IdentityUserIdentity struct {

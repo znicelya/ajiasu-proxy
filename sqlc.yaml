@@ -67,7 +67,10 @@ sql:
       - "migrations/00001_platform_foundation.sql"
       - "migrations/00003_tenancy.sql"
       - "migrations/00004_local_identity.sql"
-    queries: "sql/queries/local_identity.sql"
+      - "migrations/00005_oidc_sessions.sql"
+    queries:
+      - "sql/queries/local_identity.sql"
+      - "sql/queries/oidc_sessions.sql"
     gen:
       go:
         package: "dbgen"

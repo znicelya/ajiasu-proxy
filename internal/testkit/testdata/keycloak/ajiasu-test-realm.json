@@ -1,0 +1,69 @@
+{
+  "realm": "ajiasu-test",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 300,
+  "clients": [
+    {
+      "clientId": "control-plane",
+      "name": "AJiaSu control-plane integration client",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "control-plane-test-secret",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://127.0.0.1/*",
+        "http://localhost/*"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "wrong-audience-client",
+      "name": "AJiaSu invalid-audience integration client",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "wrong-audience-test-secret",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://127.0.0.1/*",
+        "http://localhost/*"
+      ],
+      "webOrigins": []
+    }
+  ],
+  "users": [
+    {
+      "id": "01900000-0000-7000-8000-000000000601",
+      "username": "oidc-user",
+      "email": "oidc-user@example.test",
+      "emailVerified": true,
+      "firstName": "OIDC",
+      "lastName": "User",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "oidc-user-test-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
