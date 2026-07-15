@@ -18,6 +18,9 @@ pub struct RelayOpen {
     pub gateway_id: Uuid,
     pub runner_id: Uuid,
     pub generation: u64,
+    pub assignment_id: Uuid,
+    pub assignment_generation: u64,
+    pub assignment_valid_until: OffsetDateTime,
     pub protocol: String,
     pub policy_hash: String,
     pub target_host: String,
@@ -75,6 +78,12 @@ impl RunnerSockets {
         {
             return Err(RelayError::InvalidMetadata);
         };
+        if open.assignment_id.is_nil()
+            || open.assignment_generation != open.generation
+            || open.assignment_valid_until <= now
+        {
+            return Err(RelayError::Unauthorized);
+        }
         open.grant
             .verify(
                 key,

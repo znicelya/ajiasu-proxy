@@ -27,10 +27,23 @@ type Config struct {
 	HTTP        HTTP
 	AgentGRPC   AgentGRPC
 	Database    Database
+	Redis       Redis
 	OIDC        OIDC
 	Session     Session
 	KeyringFile string
 	LocalAuth   LocalAuth
+}
+
+type Redis struct {
+	Address            string
+	Username           string
+	PasswordFile       string
+	Database           int
+	TLS                bool
+	LeaseNamespace     string
+	LeaseTTL           time.Duration
+	LeaseRenewInterval time.Duration
+	OperationTimeout   time.Duration
 }
 
 type HTTP struct {
@@ -112,6 +125,10 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	redisConfig, err := l.loadRedis()
+	if err != nil {
+		return Config{}, err
+	}
 	oidc, err := l.loadOIDC(environment)
 	if err != nil {
 		return Config{}, err
@@ -144,6 +161,7 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		HTTP:        httpConfig,
 		AgentGRPC:   agentGRPC,
 		Database:    database,
+		Redis:       redisConfig,
 		OIDC:        oidc,
 		Session:     session,
 		KeyringFile: keyringFile,
@@ -171,6 +189,14 @@ func (c Config) LogValue() slog.Value {
 			slog.Int("platform_max_open", c.Database.Platform.MaxOpenConnections),
 			slog.Int("platform_min_idle", c.Database.Platform.MinIdleConnections),
 		),
+		slog.Group("redis",
+			slog.String("address", c.Redis.Address),
+			slog.Int("database", c.Redis.Database),
+			slog.Bool("tls", c.Redis.TLS),
+			slog.Duration("lease_ttl", c.Redis.LeaseTTL),
+			slog.Duration("lease_renew_interval", c.Redis.LeaseRenewInterval),
+			slog.Duration("operation_timeout", c.Redis.OperationTimeout),
+		),
 		slog.Group("oidc",
 			slog.String("issuer", c.OIDC.Issuer),
 			slog.String("client_id", c.OIDC.ClientID),
@@ -184,6 +210,55 @@ func (c Config) LogValue() slog.Value {
 			slog.Int("allowed_cidr_count", len(c.LocalAuth.AllowedCIDRs)),
 		),
 	)
+}
+
+func (l loader) loadRedis() (Redis, error) {
+	address, err := l.required("AJIASU_REDIS_ADDRESS")
+	if err != nil {
+		return Redis{}, err
+	}
+	if _, _, err := net.SplitHostPort(address); err != nil {
+		return Redis{}, fieldError("AJIASU_REDIS_ADDRESS", "must be host:port")
+	}
+	username, _ := l.lookup("AJIASU_REDIS_USERNAME")
+	passwordFile, err := l.required("AJIASU_REDIS_PASSWORD_FILE")
+	if err != nil {
+		return Redis{}, err
+	}
+	password, _, err := readRegularFile(passwordFile, 64*1024+1)
+	if err != nil || len(bytes.TrimSpace(password)) == 0 || len(password) > 64*1024 {
+		clear(password)
+		return Redis{}, fieldError("AJIASU_REDIS_PASSWORD_FILE", "must identify a nonempty accessible regular file")
+	}
+	clear(password)
+	database, err := l.integer("AJIASU_REDIS_DATABASE")
+	if err != nil || database < 0 {
+		return Redis{}, fieldError("AJIASU_REDIS_DATABASE", "must be a nonnegative integer")
+	}
+	tlsEnabled, err := l.boolean("AJIASU_REDIS_TLS")
+	if err != nil {
+		return Redis{}, err
+	}
+	namespace, err := l.required("AJIASU_SCHEDULER_LEASE_NAMESPACE")
+	if err != nil {
+		return Redis{}, err
+	}
+	ttl, err := l.duration("AJIASU_SCHEDULER_LEASE_TTL")
+	if err != nil {
+		return Redis{}, err
+	}
+	renew, err := l.duration("AJIASU_SCHEDULER_LEASE_RENEW_INTERVAL")
+	if err != nil {
+		return Redis{}, err
+	}
+	timeout, err := l.duration("AJIASU_REDIS_OPERATION_TIMEOUT")
+	if err != nil {
+		return Redis{}, err
+	}
+	if ttl < 3*time.Second || ttl > 5*time.Minute || renew >= ttl/2 || timeout > renew {
+		return Redis{}, fieldError("AJIASU_SCHEDULER_LEASE_TTL", "is incompatible with renewal and timeout settings")
+	}
+	return Redis{Address: address, Username: strings.TrimSpace(username), PasswordFile: passwordFile, Database: database, TLS: tlsEnabled, LeaseNamespace: namespace, LeaseTTL: ttl, LeaseRenewInterval: renew, OperationTimeout: timeout}, nil
 }
 
 func (c Config) String() string {
