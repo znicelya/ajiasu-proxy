@@ -99,6 +99,13 @@ message Route {
   repeated string protocols = 4;
   repeated ProxyCredentialVerifier credentials = 5;
   RouteGrant grant = 6;
+  string assignment_id = 7;
+  uint64 assignment_generation = 8;
+  string account_id = 9;
+  string node_id = 10;
+  string assignment_state = 11;
+  string valid_until = 12;
+  reserved 13 to 19;
 }
 
 message ProxyCredentialVerifier {
