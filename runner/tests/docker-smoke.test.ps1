@@ -34,8 +34,10 @@ if ($command -ne '["connect"]') { throw "unexpected command: $command" }
 $workdir = Invoke-Docker @('image', 'inspect', $image, '--format', '{{.Config.WorkingDir}}')
 if ($workdir -ne '/var/lib/ajiasu') { throw "unexpected working directory: $workdir" }
 
-$labels = Invoke-Docker @('image', 'inspect', $image, '--format', '{{index .Config.Labels \"org.opencontainers.image.version\"}}')
-if ($labels -ne '4.2.3.0') { throw "unexpected AJiaSu version label: $labels" }
+$labelsJson = Invoke-Docker @('image', 'inspect', $image, '--format', '{{json .Config.Labels}}')
+$labels = $labelsJson | ConvertFrom-Json
+$version = $labels.'org.opencontainers.image.version'
+if ($version -ne '4.2.3.0') { throw "unexpected AJiaSu version label: $version" }
 
 $ajiasuMode = Invoke-Docker @('run', '--rm', '--entrypoint', '/bin/sh', $image, '-c', 'stat -c %u:%g-%a /usr/local/bin/ajiasu')
 if ($ajiasuMode -ne '0:0-555') { throw "unexpected AJiaSu executable ownership/mode: $ajiasuMode (expected 0:0 555)" }
