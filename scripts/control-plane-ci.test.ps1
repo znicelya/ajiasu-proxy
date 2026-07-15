@@ -44,4 +44,22 @@ if (-not $content.Contains("'--output', 'type=cacheonly', '.'")) {
     throw 'control-plane CI must verify the multiarch image without publishing it'
 }
 
+$workflowPath = Join-Path $PSScriptRoot '../.github/workflows/control-plane-ci.yml'
+$workflow = Get-Content -LiteralPath $workflowPath -Raw
+$verifyJobMatch = [regex]::Match($workflow, '(?ms)^  verify:\r?\n(?<job>.*?)(?=^  [a-zA-Z0-9_-]+:\r?$)')
+if (-not $verifyJobMatch.Success) {
+    throw 'control-plane workflow must define the verify job'
+}
+
+$verifyJob = $verifyJobMatch.Groups['job'].Value
+if (-not $verifyJob.Contains('docker/setup-qemu-action@')) {
+    throw 'control-plane verify job must install QEMU before its multiarch image build'
+}
+if (-not $verifyJob.Contains('docker/setup-buildx-action@')) {
+    throw 'control-plane verify job must install a multi-platform Buildx builder'
+}
+if ($verifyJob.IndexOf('docker/setup-buildx-action@') -gt $verifyJob.IndexOf('run: ./scripts/control-plane-ci.ps1')) {
+    throw 'control-plane verify job must configure Buildx before running the CI script'
+}
+
 Write-Output 'control-plane CI fixture tests passed'

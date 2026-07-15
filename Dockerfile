@@ -6,7 +6,7 @@ FROM --platform=$BUILDPLATFORM ${ALPINE_IMAGE} AS fetch
 RUN apk add --no-cache \
     ca-certificates=20260611-r0 \
     coreutils=9.7-r1 \
-    curl=8.14.1-r2 \
+    curl=8.14.1-r3 \
     tar=1.35-r3
 WORKDIR /src
 COPY runner/artifacts/ajiasu-4.2.3.0.env runner/artifacts/ajiasu-4.2.3.0.env
