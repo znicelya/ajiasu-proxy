@@ -1,0 +1,5 @@
+{
+  "protocol_revision": 1,
+  "required_messages": ["open", "data", "half_close", "error"],
+  "max_frame_bytes": 1048576
+}

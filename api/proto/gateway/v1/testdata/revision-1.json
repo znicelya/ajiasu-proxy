@@ -1,0 +1,4 @@
+{
+  "protocol_revision": 1,
+  "required_messages": ["hello", "snapshot_ack", "heartbeat", "route_health", "route_snapshot", "route_delta", "route_grant_refresh", "shutdown"]
+}

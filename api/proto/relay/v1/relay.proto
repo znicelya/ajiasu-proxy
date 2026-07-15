@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package ajiasu.relay.v1;
+
+option go_package = "github.com/dnomd343/ajiasu-proxy/internal/gen/relay/v1;relayv1";
+
+service RunnerRelay {
+  rpc Open(stream RelayFrame) returns (stream RelayFrame);
+}
+
+message RelayFrame {
+  oneof body {
+    RelayOpen open = 1;
+    RelayData data = 2;
+    RelayHalfClose half_close = 3;
+    RelayError error = 4;
+  }
+}
+
+message RelayOpen {
+  bytes signed_route_grant = 1;
+  string protocol = 2;
+  string target_host = 3;
+  uint32 target_port = 4;
+  string dns_mode = 5;
+  bytes request_nonce = 6;
+}
+
+message RelayData {
+  bytes payload = 1;
+}
+
+message RelayHalfClose {}
+
+message RelayError {
+  string code = 1;
+}

@@ -1,0 +1,127 @@
+syntax = "proto3";
+
+package ajiasu.gateway.v1;
+
+option go_package = "github.com/dnomd343/ajiasu-proxy/internal/gen/gateway/v1;gatewayv1";
+
+service GatewayControl {
+  rpc RegisterGateway(RegisterGatewayRequest) returns (RegisterGatewayResponse);
+  rpc ControlStream(stream GatewayMessage) returns (stream ControlMessage);
+}
+
+message RegisterGatewayRequest {
+  string enrollment_token = 1;
+  string gateway_instance_id = 2;
+  string requested_gateway_name = 3;
+  uint32 minimum_protocol_revision = 4;
+  uint32 maximum_protocol_revision = 5;
+  string gateway_version = 6;
+  string architecture = 7;
+  repeated string listener_protocols = 8;
+}
+
+message RegisterGatewayResponse {
+  string gateway_id = 1;
+  string session_token = 2;
+  string session_expires_at = 3;
+  uint32 selected_protocol_revision = 4;
+  uint32 heartbeat_interval_seconds = 5;
+}
+
+message GatewayMessage {
+  oneof body {
+    GatewayHello hello = 1;
+    SnapshotAck snapshot_ack = 2;
+    GatewayHeartbeat heartbeat = 3;
+    RouteHealth route_health = 4;
+  }
+}
+
+message ControlMessage {
+  oneof body {
+    RouteSnapshot route_snapshot = 1;
+    RouteDelta route_delta = 2;
+    RouteGrantRefresh route_grant_refresh = 3;
+    GatewayShutdown shutdown = 4;
+  }
+}
+
+message GatewayHello {
+  string gateway_id = 1;
+  string gateway_instance_id = 2;
+  uint32 protocol_revision = 3;
+  string gateway_version = 4;
+  string architecture = 5;
+  repeated string listener_protocols = 6;
+}
+
+message SnapshotAck {
+  uint64 snapshot_version = 1;
+  uint32 applied_route_count = 2;
+  string failure_code = 3;
+}
+
+message GatewayHeartbeat {
+  string observed_at = 1;
+  uint32 active_connections = 2;
+  uint64 bytes_in = 3;
+  uint64 bytes_out = 4;
+}
+
+message RouteHealth {
+  uint32 route_unavailable = 1;
+  uint32 relay_unavailable = 2;
+  uint32 stale_grant = 3;
+  uint32 policy_denied = 4;
+}
+
+message RouteSnapshot {
+  uint64 snapshot_version = 1;
+  string generated_at = 2;
+  repeated Route routes = 3;
+}
+
+message RouteDelta {
+  uint64 snapshot_version = 1;
+  Route route = 2;
+  bool revoked = 3;
+}
+
+message RouteGrantRefresh {
+  uint64 snapshot_version = 1;
+  RouteGrant grant = 2;
+}
+
+message Route {
+  string tenant_id = 1;
+  string endpoint_id = 2;
+  string policy_hash = 3;
+  repeated string protocols = 4;
+  repeated ProxyCredentialVerifier credentials = 5;
+  RouteGrant grant = 6;
+}
+
+message ProxyCredentialVerifier {
+  string credential_id = 1;
+  string public_identifier = 2;
+  string verifier = 3;
+  string expires_at = 4;
+  bool revoked = 5;
+}
+
+message RouteGrant {
+  string gateway_id = 1;
+  string tenant_id = 2;
+  string endpoint_id = 3;
+  string runner_id = 4;
+  uint64 generation = 5;
+  repeated string protocols = 6;
+  string policy_hash = 7;
+  string expires_at = 8;
+  bytes signature = 9;
+}
+
+message GatewayShutdown {
+  string deadline = 1;
+  string reason_code = 2;
+}
