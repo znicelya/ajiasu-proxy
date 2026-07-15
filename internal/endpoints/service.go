@@ -39,6 +39,9 @@ func (s *Service) Create(ctx context.Context, actor tenancy.TenantActor, cmd Cre
 	if cmd.DesiredRunnerState == "" {
 		cmd.DesiredRunnerState = DesiredRunning
 	}
+	if cmd.BindingMode == "" {
+		cmd.BindingMode = "fixed"
+	}
 	if cmd.Validate() != nil {
 		return Endpoint{}, Operation{}, ErrInvalidArgument
 	}
@@ -62,12 +65,54 @@ func (s *Service) Create(ctx context.Context, actor tenancy.TenantActor, cmd Cre
 	if err != nil {
 		return Endpoint{}, Operation{}, ErrStorage
 	}
+	assignmentID, err := s.newID()
+	if err != nil {
+		return Endpoint{}, Operation{}, ErrStorage
+	}
 	type result struct {
 		endpoint  Endpoint
 		operation Operation
 	}
 	out, err := database.InTenantTx(ctx, s.pools.Tenant, actor.TenantID(), actor.ActorID(), func(ctx context.Context, tx pgx.Tx) (result, error) {
 		now := s.now().UTC()
+		if cmd.BindingMode == "pool" {
+			var poolState, strategy string
+			if err := tx.QueryRow(ctx, `SELECT state,strategy FROM pools.account_pools WHERE tenant_id=$1 AND id=$2`, actor.TenantID(), cmd.PoolID).Scan(&poolState, &strategy); err != nil {
+				return result{}, mapError(err)
+			}
+			if poolState != "active" {
+				return result{}, ErrInvalidArgument
+			}
+			row := tx.QueryRow(ctx, `INSERT INTO endpoints.proxy_endpoints (id,tenant_id,name,normalized_name,binding_mode,pool_id,desired_runner_state,created_at,updated_at) VALUES ($1,$2,$3,$4,'pool',$5,$6,$7,$7) RETURNING id,tenant_id,name,binding_mode,account_id,node_id,pool_id,desired_runner_state,lifecycle_state,desired_generation,version,created_at,updated_at`, endpointID, actor.TenantID(), strings.TrimSpace(cmd.Name), strings.ToLower(strings.TrimSpace(cmd.Name)), cmd.PoolID, cmd.DesiredRunnerState, now)
+			endpoint, err := scanEndpoint(row)
+			if err != nil {
+				return result{}, mapError(err)
+			}
+			statusState, reason, operationState, progress := ObservedStopped, "desired_stopped", "succeeded", "completed"
+			if cmd.DesiredRunnerState == DesiredRunning {
+				statusState, reason, operationState, progress = ObservedPending, "awaiting_assignment", "queued", "queued"
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO endpoints.endpoint_status (tenant_id,endpoint_id,observed_state,reason_code,last_transition_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)`, actor.TenantID(), endpointID, statusState, reason, now); err != nil {
+				return result{}, mapError(err)
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO scheduler.endpoint_assignments (tenant_id,endpoint_id,assignment_id,pool_id,desired_generation,fencing_token,strategy,state,created_at,updated_at) VALUES ($1,$2,$3,$4,1,0,$5,'unassigned',$6,$6)`, actor.TenantID(), endpointID, assignmentID, cmd.PoolID, strategy, now); err != nil {
+				return result{}, mapError(err)
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO operations.operations (id,tenant_id,operation_type,resource_type,resource_id,requested_generation,state,progress_category,requested_by,created_at,updated_at,completed_at) VALUES ($1,$2,'endpoint.create','endpoint',$3,1,$4,$5,$6,$7,$7,CASE WHEN $4='succeeded' THEN $7 ELSE NULL END)`, operationID, actor.TenantID(), endpointID, operationState, progress, actor.ActorID(), now); err != nil {
+				return result{}, mapError(err)
+			}
+			if cmd.DesiredRunnerState == DesiredRunning {
+				if _, err := tx.Exec(ctx, `INSERT INTO reconciler.work_items (id,tenant_id,resource_type,resource_id,action,generation,operation_id,available_at,created_at,updated_at) VALUES ($1,$2,'endpoint',$3,'schedule',1,$4,$5,$5,$5)`, workID, actor.TenantID(), endpointID, operationID, now); err != nil {
+					return result{}, mapError(err)
+				}
+			}
+			endpoint.Status.ObservedState, endpoint.Status.ReasonCode, endpoint.Status.LastTransitionAt = statusState, reason, now
+			operation := Operation{ID: operationID, TenantID: actor.TenantID(), OperationType: "endpoint.create", ResourceType: "endpoint", ResourceID: endpointID, RequestedGeneration: 1, State: operationState, ProgressCategory: progress, CreatedAt: now, UpdatedAt: now}
+			if err := s.appendAudit(ctx, tx, actor, "endpoints.endpoint.created", endpointID, map[string]any{"endpoint_id": endpointID.String(), "pool_id": cmd.PoolID.String(), "binding_mode": "pool", "generation": int64(1)}, now); err != nil {
+				return result{}, err
+			}
+			return result{endpoint: endpoint, operation: operation}, nil
+		}
 		var maintenance, connectivity string
 		var maxRunners, reservedHeadroom, activeRunners int
 		if err := tx.QueryRow(ctx, `SELECT maintenance_state,connectivity_state,max_runners,reserved_headroom,active_runners FROM nodes.nodes WHERE id=$1`, cmd.NodeID).Scan(&maintenance, &connectivity, &maxRunners, &reservedHeadroom, &activeRunners); err != nil {
@@ -95,7 +140,7 @@ func (s *Service) Create(ctx context.Context, actor tenancy.TenantActor, cmd Cre
 		if cmd.DesiredRunnerState == DesiredRunning && reservations >= maxConcurrency {
 			return result{}, ErrAccountCapacity
 		}
-		row := tx.QueryRow(ctx, `INSERT INTO endpoints.proxy_endpoints (id,tenant_id,name,normalized_name,account_id,node_id,desired_runner_state,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING id,tenant_id,name,binding_mode,account_id,node_id,desired_runner_state,lifecycle_state,desired_generation,version,created_at,updated_at`, endpointID, actor.TenantID(), strings.TrimSpace(cmd.Name), strings.ToLower(strings.TrimSpace(cmd.Name)), cmd.AccountID, cmd.NodeID, cmd.DesiredRunnerState, now)
+		row := tx.QueryRow(ctx, `INSERT INTO endpoints.proxy_endpoints (id,tenant_id,name,normalized_name,account_id,node_id,desired_runner_state,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING id,tenant_id,name,binding_mode,account_id,node_id,pool_id,desired_runner_state,lifecycle_state,desired_generation,version,created_at,updated_at`, endpointID, actor.TenantID(), strings.TrimSpace(cmd.Name), strings.ToLower(strings.TrimSpace(cmd.Name)), cmd.AccountID, cmd.NodeID, cmd.DesiredRunnerState, now)
 		endpoint, err := scanEndpoint(row)
 		if err != nil {
 			return result{}, mapError(err)
@@ -172,7 +217,7 @@ func (s *Service) List(ctx context.Context, actor tenancy.TenantActor, after tim
 		return nil, ErrInvalidArgument
 	}
 	return database.InTenantTx(ctx, s.pools.Tenant, actor.TenantID(), actor.ActorID(), func(ctx context.Context, tx pgx.Tx) ([]Endpoint, error) {
-		rows, err := tx.Query(ctx, `SELECT e.id,e.tenant_id,e.name,e.binding_mode,e.account_id,e.node_id,e.desired_runner_state,e.lifecycle_state,e.desired_generation,e.version,e.created_at,e.updated_at,s.observed_generation,s.observed_state,s.runner_id,s.reason_code,s.last_agent_observation_at,s.last_transition_at FROM endpoints.proxy_endpoints e JOIN endpoints.endpoint_status s ON s.tenant_id=e.tenant_id AND s.endpoint_id=e.id WHERE e.tenant_id=$1 AND (e.created_at,e.id)>($2,$3) ORDER BY e.created_at,e.id LIMIT $4`, actor.TenantID(), after, afterID, limit)
+		rows, err := tx.Query(ctx, `SELECT e.id,e.tenant_id,e.name,e.binding_mode,e.account_id,e.node_id,e.pool_id,e.desired_runner_state,e.lifecycle_state,e.desired_generation,e.version,e.created_at,e.updated_at,s.observed_generation,s.observed_state,s.runner_id,s.reason_code,s.last_agent_observation_at,s.last_transition_at FROM endpoints.proxy_endpoints e JOIN endpoints.endpoint_status s ON s.tenant_id=e.tenant_id AND s.endpoint_id=e.id WHERE e.tenant_id=$1 AND (e.created_at,e.id)>($2,$3) ORDER BY e.created_at,e.id LIMIT $4`, actor.TenantID(), after, afterID, limit)
 		if err != nil {
 			return nil, mapError(err)
 		}
@@ -218,7 +263,7 @@ func (s *Service) RequestDelete(ctx context.Context, actor tenancy.TenantActor, 
 		}
 		now := s.now().UTC()
 		generation := current.DesiredGeneration + 1
-		row := tx.QueryRow(ctx, `UPDATE endpoints.proxy_endpoints SET lifecycle_state='deleting',desired_runner_state='stopped',desired_generation=$1,version=version+1,updated_at=$2 WHERE tenant_id=$3 AND id=$4 AND version=$5 RETURNING id,tenant_id,name,binding_mode,account_id,node_id,desired_runner_state,lifecycle_state,desired_generation,version,created_at,updated_at`, generation, now, actor.TenantID(), endpointID, expectedVersion)
+		row := tx.QueryRow(ctx, `UPDATE endpoints.proxy_endpoints SET lifecycle_state='deleting',desired_runner_state='stopped',desired_generation=$1,version=version+1,updated_at=$2 WHERE tenant_id=$3 AND id=$4 AND version=$5 RETURNING id,tenant_id,name,binding_mode,account_id,node_id,pool_id,desired_runner_state,lifecycle_state,desired_generation,version,created_at,updated_at`, generation, now, actor.TenantID(), endpointID, expectedVersion)
 		updated, err := scanEndpoint(row)
 		if err != nil {
 			return result{}, mapError(err)
@@ -297,6 +342,9 @@ func (s *Service) RequestState(ctx context.Context, actor tenancy.TenantActor, e
 		}
 		if current.Version != expectedVersion || current.LifecycleState != LifecycleActive {
 			return result{}, ErrVersionConflict
+		}
+		if current.BindingMode == "pool" {
+			return result{}, ErrPoolAssignmentRequired
 		}
 		if action == "start" && current.DesiredRunnerState == DesiredRunning {
 			return result{}, ErrInvalidArgument
@@ -415,7 +463,7 @@ func reserveForStart(ctx context.Context, tx pgx.Tx, tenantID, accountID, nodeID
 }
 
 func getEndpoint(ctx context.Context, tx pgx.Tx, tenantID, endpointID uuid.UUID) (Endpoint, error) {
-	row := tx.QueryRow(ctx, `SELECT e.id,e.tenant_id,e.name,e.binding_mode,e.account_id,e.node_id,e.desired_runner_state,e.lifecycle_state,e.desired_generation,e.version,e.created_at,e.updated_at,s.observed_generation,s.observed_state,s.runner_id,s.reason_code,s.last_agent_observation_at,s.last_transition_at FROM endpoints.proxy_endpoints e JOIN endpoints.endpoint_status s ON s.tenant_id=e.tenant_id AND s.endpoint_id=e.id WHERE e.tenant_id=$1 AND e.id=$2`, tenantID, endpointID)
+	row := tx.QueryRow(ctx, `SELECT e.id,e.tenant_id,e.name,e.binding_mode,e.account_id,e.node_id,e.pool_id,e.desired_runner_state,e.lifecycle_state,e.desired_generation,e.version,e.created_at,e.updated_at,s.observed_generation,s.observed_state,s.runner_id,s.reason_code,s.last_agent_observation_at,s.last_transition_at FROM endpoints.proxy_endpoints e JOIN endpoints.endpoint_status s ON s.tenant_id=e.tenant_id AND s.endpoint_id=e.id WHERE e.tenant_id=$1 AND e.id=$2`, tenantID, endpointID)
 	item, err := scanEndpointWithStatus(row)
 	return item, mapError(err)
 }
@@ -424,9 +472,16 @@ type scanner interface{ Scan(...any) error }
 
 func scanEndpoint(row scanner) (Endpoint, error) {
 	var e Endpoint
+	var accountID, nodeID *uuid.UUID
 	var desired, lifecycle string
-	if err := row.Scan(&e.ID, &e.TenantID, &e.Name, &e.BindingMode, &e.AccountID, &e.NodeID, &desired, &lifecycle, &e.DesiredGeneration, &e.Version, &e.CreatedAt, &e.UpdatedAt); err != nil {
+	if err := row.Scan(&e.ID, &e.TenantID, &e.Name, &e.BindingMode, &accountID, &nodeID, &e.PoolID, &desired, &lifecycle, &e.DesiredGeneration, &e.Version, &e.CreatedAt, &e.UpdatedAt); err != nil {
 		return Endpoint{}, err
+	}
+	if accountID != nil {
+		e.AccountID = *accountID
+	}
+	if nodeID != nil {
+		e.NodeID = *nodeID
 	}
 	e.DesiredRunnerState = DesiredRunnerState(desired)
 	e.LifecycleState = LifecycleState(lifecycle)
@@ -434,9 +489,16 @@ func scanEndpoint(row scanner) (Endpoint, error) {
 }
 func scanEndpointWithStatus(row scanner) (Endpoint, error) {
 	var e Endpoint
+	var accountID, nodeID *uuid.UUID
 	var desired, lifecycle, observed string
-	if err := row.Scan(&e.ID, &e.TenantID, &e.Name, &e.BindingMode, &e.AccountID, &e.NodeID, &desired, &lifecycle, &e.DesiredGeneration, &e.Version, &e.CreatedAt, &e.UpdatedAt, &e.Status.ObservedGeneration, &observed, &e.Status.RunnerID, &e.Status.ReasonCode, &e.Status.LastAgentObservationAt, &e.Status.LastTransitionAt); err != nil {
+	if err := row.Scan(&e.ID, &e.TenantID, &e.Name, &e.BindingMode, &accountID, &nodeID, &e.PoolID, &desired, &lifecycle, &e.DesiredGeneration, &e.Version, &e.CreatedAt, &e.UpdatedAt, &e.Status.ObservedGeneration, &observed, &e.Status.RunnerID, &e.Status.ReasonCode, &e.Status.LastAgentObservationAt, &e.Status.LastTransitionAt); err != nil {
 		return Endpoint{}, err
+	}
+	if accountID != nil {
+		e.AccountID = *accountID
+	}
+	if nodeID != nil {
+		e.NodeID = *nodeID
 	}
 	e.DesiredRunnerState = DesiredRunnerState(desired)
 	e.LifecycleState = LifecycleState(lifecycle)

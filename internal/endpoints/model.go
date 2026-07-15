@@ -9,15 +9,16 @@ import (
 )
 
 var (
-	ErrForbidden       = errors.New("endpoint operation is forbidden")
-	ErrInvalidArgument = errors.New("invalid endpoint argument")
-	ErrNotFound        = errors.New("endpoint was not found")
-	ErrAlreadyExists   = errors.New("endpoint already exists")
-	ErrVersionConflict = errors.New("endpoint version conflict")
-	ErrNodeUnavailable = errors.New("endpoint node is unavailable")
-	ErrNodeCapacity    = errors.New("endpoint node capacity is exhausted")
-	ErrAccountCapacity = errors.New("endpoint account capacity is exhausted")
-	ErrStorage         = errors.New("endpoint storage failure")
+	ErrForbidden              = errors.New("endpoint operation is forbidden")
+	ErrInvalidArgument        = errors.New("invalid endpoint argument")
+	ErrNotFound               = errors.New("endpoint was not found")
+	ErrAlreadyExists          = errors.New("endpoint already exists")
+	ErrVersionConflict        = errors.New("endpoint version conflict")
+	ErrNodeUnavailable        = errors.New("endpoint node is unavailable")
+	ErrNodeCapacity           = errors.New("endpoint node capacity is exhausted")
+	ErrAccountCapacity        = errors.New("endpoint account capacity is exhausted")
+	ErrStorage                = errors.New("endpoint storage failure")
+	ErrPoolAssignmentRequired = errors.New("pool endpoint requires scheduler assignment")
 )
 
 type DesiredRunnerState string
@@ -52,8 +53,9 @@ type Endpoint struct {
 	TenantID           uuid.UUID          `json:"tenant_id"`
 	Name               string             `json:"name"`
 	BindingMode        string             `json:"binding_mode"`
-	AccountID          uuid.UUID          `json:"account_id"`
-	NodeID             uuid.UUID          `json:"node_id"`
+	AccountID          uuid.UUID          `json:"account_id,omitempty"`
+	NodeID             uuid.UUID          `json:"node_id,omitempty"`
+	PoolID             *uuid.UUID         `json:"pool_id,omitempty"`
 	DesiredRunnerState DesiredRunnerState `json:"desired_runner_state"`
 	LifecycleState     LifecycleState     `json:"lifecycle_state"`
 	DesiredGeneration  int64              `json:"desired_generation"`
@@ -84,13 +86,21 @@ type Operation struct {
 }
 type CreateCommand struct {
 	Name               string
+	BindingMode        string
 	AccountID          uuid.UUID
 	NodeID             uuid.UUID
+	PoolID             uuid.UUID
 	DesiredRunnerState DesiredRunnerState
 }
 
 func (c CreateCommand) Validate() error {
-	if len(strings.TrimSpace(c.Name)) == 0 || len(strings.TrimSpace(c.Name)) > 200 || c.AccountID == uuid.Nil || c.NodeID == uuid.Nil {
+	if len(strings.TrimSpace(c.Name)) == 0 || len(strings.TrimSpace(c.Name)) > 200 {
+		return ErrInvalidArgument
+	}
+	if c.BindingMode == "" {
+		c.BindingMode = "fixed"
+	}
+	if (c.BindingMode == "fixed" && (c.AccountID == uuid.Nil || c.NodeID == uuid.Nil || c.PoolID != uuid.Nil)) || (c.BindingMode == "pool" && (c.PoolID == uuid.Nil || c.AccountID != uuid.Nil || c.NodeID != uuid.Nil)) {
 		return ErrInvalidArgument
 	}
 	if c.DesiredRunnerState == "" {

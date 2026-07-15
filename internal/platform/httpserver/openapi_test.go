@@ -66,6 +66,7 @@ func registeredRouteCatalog(t *testing.T, root string) map[string]struct{} {
 		{path: filepath.Join(root, "internal", "pools", "http.go"), prefix: "/api/v1"},
 		{path: filepath.Join(root, "internal", "nodes", "http.go"), prefix: "/api/v1"},
 		{path: filepath.Join(root, "internal", "endpoints", "http.go"), prefix: "/api/v1"},
+		{path: filepath.Join(root, "internal", "scheduler", "http.go"), prefix: "/api/v1"},
 		{path: filepath.Join(root, "internal", "proxyaccess", "http.go"), prefix: "/api/v1"},
 		{path: filepath.Join(root, "internal", "operations", "http.go"), prefix: "/api/v1"},
 		{path: filepath.Join(root, "internal", "reconciler", "http.go"), prefix: "/api/v1"},
