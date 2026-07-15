@@ -118,6 +118,10 @@ Files are grouped by responsibility. Go packages remain internal until a cross-p
 
 ## Phase 5: Rust Proxy Gateway and Access Policy
 
+**Detailed spec:** `docs/superpowers/specs/2026-07-15-rust-proxy-gateway-access-policy-design.md`
+
+**Detailed plan:** `docs/superpowers/plans/2026-07-15-rust-proxy-gateway-access-policy.md`
+
 **Entry dependency:** Phase 4 exposes stable Runner routing and health information.
 
 **Produces:**
@@ -194,4 +198,3 @@ Files are grouped by responsibility. Go packages remain internal until a cross-p
 - Require two reviewers for authentication, authorization, secret handling, tenant scoping, proxy policy, and lease logic.
 - Do not merge a phase with skipped security, isolation, migration, or end-to-end gates.
 - Update the compatibility matrix whenever AJiaSu, API, gRPC, database, Compose, or Helm compatibility changes.
-
