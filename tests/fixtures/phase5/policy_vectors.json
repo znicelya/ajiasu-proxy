@@ -1,0 +1,24 @@
+[
+  {
+    "name": "idna-protocol-and-port-ordering",
+    "input": {
+      "protocols": ["socks5", "http", "http"],
+      "dns_mode": "gateway",
+      "target_allow_domains": ["BÜCHER.Example."],
+      "allowed_ports": [
+        {"from": 443, "to": 443},
+        {"from": 80, "to": 80}
+      ],
+      "limits": {
+        "max_connections": 10,
+        "max_connection_rate": 5,
+        "idle_timeout_seconds": 30,
+        "max_bytes_per_connection": 1000,
+        "traffic_window_seconds": 60,
+        "max_window_bytes": 10000
+      }
+    },
+    "canonical": "{\"protocols\":[\"http\",\"socks5\"],\"dns_mode\":\"gateway\",\"source_cidrs\":[],\"target_allow_cidrs\":[],\"target_deny_cidrs\":[],\"target_allow_domains\":[\"xn--bcher-kva.example\"],\"target_deny_domains\":[],\"allowed_ports\":[{\"from\":80,\"to\":80},{\"from\":443,\"to\":443}],\"limits\":{\"max_connections\":10,\"max_connection_rate\":5,\"idle_timeout_seconds\":30,\"max_bytes_per_connection\":1000,\"traffic_window_seconds\":60,\"max_window_bytes\":10000}}",
+    "sha256": "8b0e1c52fc08a14c275c7020ab068058399f7f0512bbaa342483d2eb5cd86ea9"
+  }
+]
