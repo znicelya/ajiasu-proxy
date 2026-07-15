@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/agent-protocol", "crates/agent", "crates/proxy-policy"]
+members = ["crates/agent-protocol", "crates/agent", "crates/proxy-policy", "crates/proxy-protocol"]
 resolver = "2"
 
 [workspace.package]
@@ -25,6 +25,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "syn
 tokio-stream = "0.1"
 tonic = { version = "0.14", features = ["transport"] }
 tonic-prost = "0.14"
+url = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 uuid = { version = "1", features = ["serde", "v7"] }
