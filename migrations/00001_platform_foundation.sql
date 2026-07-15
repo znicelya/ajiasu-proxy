@@ -39,8 +39,10 @@ $$;
 
 REVOKE ALL ON FUNCTION platform.current_tenant_id(), platform.current_actor_id() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform.current_tenant_id(), platform.current_actor_id() TO ajiasu_app, ajiasu_platform;
+GRANT SELECT ON public.goose_db_version TO ajiasu_app, ajiasu_platform;
 
 -- +goose Down
+REVOKE ALL ON public.goose_db_version FROM ajiasu_app, ajiasu_platform;
 DROP FUNCTION platform.current_actor_id();
 DROP FUNCTION platform.current_tenant_id();
 

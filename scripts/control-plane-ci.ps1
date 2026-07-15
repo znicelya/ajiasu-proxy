@@ -71,6 +71,21 @@ function Invoke-PowerShellScript {
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $previousRequireDocker = $env:AJIASU_REQUIRE_DOCKER
+$imageLock = @{}
+foreach ($line in Get-Content -LiteralPath (Join-Path $repoRoot 'build/control-plane-images.lock')) {
+    if ([string]::IsNullOrWhiteSpace($line)) {
+        continue
+    }
+    if ($line -notmatch '^([A-Z_]+)=([^\s]+@sha256:[0-9a-f]{64})$') {
+        throw "Invalid control-plane image lock line: $line"
+    }
+    $imageLock[$Matches[1]] = $Matches[2]
+}
+foreach ($requiredImage in @('GO_BUILD_IMAGE', 'CONTROL_PLANE_RUNTIME_IMAGE')) {
+    if (-not $imageLock.ContainsKey($requiredImage)) {
+        throw "Missing control-plane image lock: $requiredImage"
+    }
+}
 
 Push-Location -LiteralPath $repoRoot
 try {
@@ -84,6 +99,14 @@ try {
     Invoke-NativeCommand -FilePath 'go' -Arguments @('test', '-race', '-p', '1', './...')
     Invoke-NativeCommand -FilePath 'go' -Arguments @('vet', './...')
     Invoke-NativeCommand -FilePath 'go' -Arguments @('tool', 'staticcheck', './...')
+    Invoke-NativeCommand -FilePath 'docker' -Arguments @(
+        'buildx', 'build', '--no-cache', '--pull=false',
+        '--platform', 'linux/amd64,linux/arm64',
+        '--file', 'Dockerfile.control-plane',
+        '--build-arg', "GO_BUILD_IMAGE=$($imageLock['GO_BUILD_IMAGE'])",
+        '--build-arg', "RUNTIME_IMAGE=$($imageLock['CONTROL_PLANE_RUNTIME_IMAGE'])",
+        '--output', 'type=cacheonly', '.'
+    )
 }
 finally {
     if ($null -eq $previousRequireDocker) {

@@ -6,6 +6,7 @@ $expectedByTag = @{
     'postgres:17.6-alpine3.22' = 'sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94'
     'quay.io/keycloak/keycloak:26.3.2' = 'sha256:98fab020a3a490aba0978f237e2a06cd0ea42bf149c6cf10f11c0aaf27728ff2'
     'golang:1.25.3-alpine3.22' = 'sha256:aee43c3ccbf24fdffb7295693b6e33b21e01baec1b2a55acc351fde345e9ec34'
+    'alpine:3.22' = 'sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce'
 }
 $manifestInspections = 0
 $fixtureRawMode = 'valid'
@@ -83,12 +84,13 @@ $lockLines = foreach ($entry in $expectedByTag.GetEnumerator()) {
         '^postgres:' { 'POSTGRES_IMAGE'; break }
         '^quay\.io/keycloak/' { 'KEYCLOAK_IMAGE'; break }
         '^golang:' { 'GO_BUILD_IMAGE'; break }
+        '^alpine:' { 'CONTROL_PLANE_RUNTIME_IMAGE'; break }
         default { throw "unmapped fixture image: $($entry.Key)" }
     }
     "$name=$resolved"
 }
-if ($manifestInspections -ne 6) {
-    throw "fixture manifest inspections = $manifestInspections, want 6"
+if ($manifestInspections -ne 8) {
+    throw "fixture manifest inspections = $manifestInspections, want 8"
 }
 
 Assert-Throws -Action {
@@ -116,6 +118,7 @@ $orderedLines = @(
             '^POSTGRES_IMAGE=' { 0; break }
             '^KEYCLOAK_IMAGE=' { 1; break }
             '^GO_BUILD_IMAGE=' { 2; break }
+            '^CONTROL_PLANE_RUNTIME_IMAGE=' { 3; break }
         }
     }
 )

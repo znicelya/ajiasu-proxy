@@ -81,6 +81,33 @@ type IdentityOidcIdentity struct {
 	UpdatedAt   time.Time
 }
 
+type IdentityServiceIdentity struct {
+	ID         uuid.UUID
+	Scope      string
+	TenantID   *uuid.UUID
+	ScopeKey   *uuid.UUID
+	Name       string
+	DisabledAt *time.Time
+	Version    int64
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type IdentityServiceToken struct {
+	ID                uuid.UUID
+	ServiceIdentityID uuid.UUID
+	Scope             string
+	TenantID          *uuid.UUID
+	ScopeKey          *uuid.UUID
+	Prefix            string
+	Verifier          string
+	Role              string
+	SourceCidr        *netip.Prefix
+	ExpiresAt         time.Time
+	RevokedAt         *time.Time
+	CreatedAt         time.Time
+}
+
 type IdentityUserIdentity struct {
 	ID             uuid.UUID
 	TenantEligible bool

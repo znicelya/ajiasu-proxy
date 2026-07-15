@@ -14,14 +14,6 @@ import (
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/logging"
 )
 
-var errDatabaseNotConfigured = errors.New("database_not_configured")
-
-type pendingDatabaseReadiness struct{}
-
-func (pendingDatabaseReadiness) Check(context.Context) error {
-	return errDatabaseNotConfigured
-}
-
 func main() {
 	if handled, exitCode := runAdminCLI(os.Args[1:], os.LookupEnv, os.Stdin, os.Stdout, os.Stderr); handled {
 		if exitCode != 0 {
@@ -38,14 +30,15 @@ func main() {
 	}
 	logger.Info("configuration_loaded", slog.Any("config", cfg))
 
-	handler := httpserver.NewRouter(httpserver.Dependencies{
-		Logger:    baseLogger,
-		Readiness: pendingDatabaseReadiness{},
-	})
-	server := httpserver.NewServer(cfg.HTTP, handler)
+	switcher := &switchingHandler{}
+	runtime := newApplicationRuntime(cfg, baseLogger, switcher.Store)
+	switcher.Store(httpserver.NewRouter(httpserver.Dependencies{Logger: baseLogger, Readiness: runtime}))
+	server := httpserver.NewServer(cfg.HTTP, switcher)
 
 	signalContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	defer runtime.Close()
+	go runtime.Warm(signalContext)
 
 	serverError := make(chan error, 1)
 	go func() {

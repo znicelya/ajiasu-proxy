@@ -32,6 +32,70 @@ func NewService(pools *database.Pools, auditService audit.Service) *Service {
 	}
 }
 
+func (s *Service) GetTenant(ctx context.Context, actor PlatformActor, tenantID uuid.UUID) (Tenant, error) {
+	if tenantID == uuid.Nil || !Authorize(actor.subject, ActionUpdateTenant, Target{Scope: ScopePlatform}).Allowed {
+		return Tenant{}, ErrForbidden
+	}
+	row, err := database.InPlatformTx(ctx, s.pools.Platform, actor.ActorID(), func(ctx context.Context, tx pgx.Tx) (dbgen.TenancyTenant, error) {
+		return getTenant(ctx, tx, tenantID)
+	})
+	if err != nil {
+		return Tenant{}, mapStorageError(err)
+	}
+	return mapTenant(row), nil
+}
+
+func (s *Service) ListTenants(ctx context.Context, actor PlatformActor, after time.Time, afterID uuid.UUID, pageSize int32) ([]Tenant, error) {
+	if pageSize < 1 || pageSize > 200 || !Authorize(actor.subject, ActionUpdateTenant, Target{Scope: ScopePlatform}).Allowed {
+		return nil, ErrForbidden
+	}
+	rows, err := database.InPlatformTx(ctx, s.pools.Platform, actor.ActorID(), func(ctx context.Context, tx pgx.Tx) ([]dbgen.TenancyTenant, error) {
+		return listTenants(ctx, tx, after, afterID, pageSize)
+	})
+	if err != nil {
+		return nil, mapStorageError(err)
+	}
+	result := make([]Tenant, len(rows))
+	for index := range rows {
+		result[index] = mapTenant(rows[index])
+	}
+	return result, nil
+}
+
+func (s *Service) ListMembers(ctx context.Context, actor TenantActor, after time.Time, afterID uuid.UUID, pageSize int32) ([]Membership, error) {
+	if pageSize < 1 || pageSize > 200 || !Authorize(actor.subject, ActionAddMember, tenantTarget(actor.tenantID)).Allowed {
+		return nil, ErrForbidden
+	}
+	rows, err := database.InTenantTx(ctx, s.pools.Tenant, actor.tenantID, actor.ActorID(), func(ctx context.Context, tx pgx.Tx) ([]dbgen.TenancyMembership, error) {
+		return listMemberships(ctx, tx, actor.tenantID, after, afterID, pageSize)
+	})
+	if err != nil {
+		return nil, mapStorageError(err)
+	}
+	result := make([]Membership, len(rows))
+	for index := range rows {
+		result[index] = mapMembership(rows[index])
+	}
+	return result, nil
+}
+
+func (s *Service) ListRoleBindings(ctx context.Context, actor TenantActor, after time.Time, afterID uuid.UUID, pageSize int32) ([]RoleBinding, error) {
+	if pageSize < 1 || pageSize > 200 || !Authorize(actor.subject, ActionGrantRole, tenantTarget(actor.tenantID)).Allowed {
+		return nil, ErrForbidden
+	}
+	rows, err := database.InTenantTx(ctx, s.pools.Tenant, actor.tenantID, actor.ActorID(), func(ctx context.Context, tx pgx.Tx) ([]dbgen.TenancyRoleBinding, error) {
+		return listRoleBindings(ctx, tx, actor.tenantID, after, afterID, pageSize)
+	})
+	if err != nil {
+		return nil, mapStorageError(err)
+	}
+	result := make([]RoleBinding, len(rows))
+	for index := range rows {
+		result[index] = mapRoleBinding(rows[index])
+	}
+	return result, nil
+}
+
 func (s *Service) CreateTenant(ctx context.Context, actor PlatformActor, command CreateTenant) (Tenant, error) {
 	if err := command.Validate(); err != nil {
 		return Tenant{}, err

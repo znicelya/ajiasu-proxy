@@ -256,6 +256,76 @@ func (q *Queries) LeaseOutboxEvents(ctx context.Context, arg LeaseOutboxEventsPa
 	return items, nil
 }
 
+const listAuditEvents = `-- name: ListAuditEvents :many
+SELECT id, tenant_id, actor_type, actor_id, action, resource_type, resource_id,
+       result, source_ip, user_agent, request_id, created_at
+FROM audit.audit_events
+WHERE ($1::uuid IS NULL OR tenant_id = $1)
+  AND (created_at, id) > ($2::timestamptz, $3::uuid)
+ORDER BY created_at, id
+LIMIT $4
+`
+
+type ListAuditEventsParams struct {
+	TenantID       *uuid.UUID
+	AfterCreatedAt time.Time
+	AfterID        uuid.UUID
+	PageSize       int32
+}
+
+type ListAuditEventsRow struct {
+	ID           uuid.UUID
+	TenantID     *uuid.UUID
+	ActorType    string
+	ActorID      *uuid.UUID
+	Action       string
+	ResourceType string
+	ResourceID   *uuid.UUID
+	Result       string
+	SourceIp     netip.Addr
+	UserAgent    string
+	RequestID    uuid.UUID
+	CreatedAt    time.Time
+}
+
+func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]ListAuditEventsRow, error) {
+	rows, err := q.db.Query(ctx, listAuditEvents,
+		arg.TenantID,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAuditEventsRow
+	for rows.Next() {
+		var i ListAuditEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.ActorType,
+			&i.ActorID,
+			&i.Action,
+			&i.ResourceType,
+			&i.ResourceID,
+			&i.Result,
+			&i.SourceIp,
+			&i.UserAgent,
+			&i.RequestID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const releaseOutboxEvent = `-- name: ReleaseOutboxEvent :execrows
 UPDATE platform.outbox_events
 SET available_at = $1,

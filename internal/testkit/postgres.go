@@ -31,6 +31,7 @@ type Postgres struct {
 	AdminDSN    string
 	TenantDSN   string
 	PlatformDSN string
+	container   testcontainers.Container
 }
 
 func StartPostgres(t *testing.T) *Postgres {
@@ -41,25 +42,37 @@ func StartPostgres(t *testing.T) *Postgres {
 	adminPassword := randomPassword(t)
 	tenantPassword := randomPassword(t)
 	platformPassword := randomPassword(t)
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        lockedPostgresImage(t),
-			ExposedPorts: []string{postgresPort},
-			Env: map[string]string{
-				"POSTGRES_DB":       testDatabase,
-				"POSTGRES_PASSWORD": adminPassword,
-				"POSTGRES_USER":     adminRole,
+	var container testcontainers.Container
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ {
+		container, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+			ContainerRequest: testcontainers.ContainerRequest{
+				Image:        lockedPostgresImage(t),
+				ExposedPorts: []string{postgresPort},
+				Env: map[string]string{
+					"POSTGRES_DB":       testDatabase,
+					"POSTGRES_PASSWORD": adminPassword,
+					"POSTGRES_USER":     adminRole,
+				},
+				WaitingFor: wait.ForLog("database system is ready to accept connections").
+					WithOccurrence(2).
+					WithStartupTimeout(2 * time.Minute),
 			},
-			WaitingFor: wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(2 * time.Minute),
-		},
-		Started: true,
-	})
-	testcontainers.CleanupContainer(t, container)
+			Started: true,
+		})
+		if err == nil {
+			break
+		}
+		message := strings.ToLower(err.Error())
+		if attempt == 3 || !strings.Contains(message, "reaper") && !strings.Contains(message, "removing") {
+			break
+		}
+		time.Sleep(time.Duration(attempt) * time.Second)
+	}
 	if err != nil {
 		t.Fatalf("start locked PostgreSQL container: %v", err)
 	}
+	testcontainers.CleanupContainer(t, container)
 
 	host, err := container.Host(ctx)
 	if err != nil {
@@ -74,11 +87,47 @@ func StartPostgres(t *testing.T) *Postgres {
 		AdminDSN:    postgresDSN(host, port.Port(), adminRole, adminPassword),
 		TenantDSN:   postgresDSN(host, port.Port(), tenantLoginRole, tenantPassword),
 		PlatformDSN: postgresDSN(host, port.Port(), platformLoginRole, platformPassword),
+		container:   container,
 	}
 	waitForDatabase(t, ctx, postgres.AdminDSN)
 	createLoginRole(t, ctx, postgres.AdminDSN, tenantLoginRole, tenantPassword)
 	createLoginRole(t, ctx, postgres.AdminDSN, platformLoginRole, platformPassword)
 	return postgres
+}
+
+func (p *Postgres) Restart(t *testing.T) {
+	t.Helper()
+	if p == nil || p.container == nil {
+		t.Fatal("PostgreSQL test container is not available")
+	}
+	if err := p.container.Stop(t.Context(), nil); err != nil {
+		t.Fatalf("stop locked PostgreSQL container: %v", err)
+	}
+	if err := p.container.Start(t.Context()); err != nil {
+		t.Fatalf("restart locked PostgreSQL container: %v", err)
+	}
+	host, err := p.container.Host(t.Context())
+	if err != nil {
+		t.Fatalf("resolve restarted PostgreSQL host: %v", err)
+	}
+	port, err := p.container.MappedPort(t.Context(), postgresPort)
+	if err != nil {
+		t.Fatalf("resolve restarted PostgreSQL port: %v", err)
+	}
+	p.AdminDSN = replaceDSNHost(t, p.AdminDSN, host, port.Port())
+	p.TenantDSN = replaceDSNHost(t, p.TenantDSN, host, port.Port())
+	p.PlatformDSN = replaceDSNHost(t, p.PlatformDSN, host, port.Port())
+	waitForDatabase(t, t.Context(), p.AdminDSN)
+}
+
+func replaceDSNHost(t *testing.T, dsn, host, port string) string {
+	t.Helper()
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("parse PostgreSQL DSN during restart: %v", err)
+	}
+	parsed.Host = host + ":" + port
+	return parsed.String()
 }
 
 func (p *Postgres) GrantApplicationRoles(t *testing.T) {

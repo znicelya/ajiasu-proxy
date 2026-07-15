@@ -18,12 +18,35 @@ type Executor interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
+type transactionContext struct {
+	tx       pgx.Tx
+	tenantID *uuid.UUID
+	actorID  uuid.UUID
+}
+
+type transactionContextKey struct{}
+
+func ContextWithPlatformTx(ctx context.Context, tx pgx.Tx, actorID uuid.UUID) context.Context {
+	return context.WithValue(ctx, transactionContextKey{}, transactionContext{tx: tx, actorID: actorID})
+}
+
+func ContextWithTenantTx(ctx context.Context, tx pgx.Tx, tenantID, actorID uuid.UUID) context.Context {
+	copy := tenantID
+	return context.WithValue(ctx, transactionContextKey{}, transactionContext{tx: tx, tenantID: &copy, actorID: actorID})
+}
+
 func InTenantTx[T any](ctx context.Context, pool *pgxpool.Pool, tenantID, actorID uuid.UUID, fn func(context.Context, pgx.Tx) (T, error)) (result T, err error) {
 	if tenantID == uuid.Nil {
 		return result, errors.New("tenant ID must not be zero")
 	}
 	if actorID == uuid.Nil {
 		return result, errors.New("actor ID must not be zero")
+	}
+	if existing, ok := ctx.Value(transactionContextKey{}).(transactionContext); ok {
+		if existing.tx == nil || existing.tenantID == nil || *existing.tenantID != tenantID || existing.actorID != actorID {
+			return result, errors.New("tenant transaction context does not match requested scope")
+		}
+		return fn(ctx, existing.tx)
 	}
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -52,6 +75,12 @@ func InTenantTx[T any](ctx context.Context, pool *pgxpool.Pool, tenantID, actorI
 func InPlatformTx[T any](ctx context.Context, pool *pgxpool.Pool, actorID uuid.UUID, fn func(context.Context, pgx.Tx) (T, error)) (result T, err error) {
 	if actorID == uuid.Nil {
 		return result, errors.New("actor ID must not be zero")
+	}
+	if existing, ok := ctx.Value(transactionContextKey{}).(transactionContext); ok {
+		if existing.tx == nil || existing.tenantID != nil || existing.actorID != actorID {
+			return result, errors.New("platform transaction context does not match requested scope")
+		}
+		return fn(ctx, existing.tx)
 	}
 	tx, err := pool.Begin(ctx)
 	if err != nil {

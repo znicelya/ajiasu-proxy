@@ -1,0 +1,637 @@
+openapi: 3.1.0
+info:
+  title: AJiaSu Control Plane API
+  version: 1.0.0
+  description: Phase 2 tenant, identity, and audit management API.
+servers:
+  - url: /
+tags:
+  - name: health
+  - name: auth
+  - name: tenants
+  - name: service-identities
+  - name: audit
+paths:
+  /livez:
+    get:
+      operationId: getLiveness
+      tags: [health]
+      responses:
+        '200': {$ref: '#/components/responses/Health'}
+  /readyz:
+    get:
+      operationId: getReadiness
+      tags: [health]
+      responses:
+        '200': {$ref: '#/components/responses/Health'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v1/auth/session:
+    get:
+      operationId: getSession
+      tags: [auth]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200':
+          description: Current authenticated principal.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        '401': {$ref: '#/components/responses/Error'}
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      security: [{cookieAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CSRFToken'}
+      responses:
+        '204': {description: Session revoked.}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/v1/auth/oidc/login:
+    get:
+      operationId: beginOIDCLogin
+      tags: [auth]
+      parameters:
+        - name: return_path
+          in: query
+          schema: {type: string, default: /}
+      responses:
+        '302': {description: Redirect to the configured OIDC provider.}
+        '400': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v1/auth/oidc/callback:
+    get:
+      operationId: completeOIDCLogin
+      tags: [auth]
+      parameters:
+        - {name: state, in: query, required: true, schema: {type: string}}
+        - {name: code, in: query, required: true, schema: {type: string}}
+      responses:
+        '302': {description: Session created and browser redirected.}
+        '400': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v1/auth/local/login:
+    post:
+      operationId: localLogin
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [identifier, password, second_factor]
+              properties:
+                identifier: {type: string}
+                password: {type: string, format: password}
+                second_factor: {type: string}
+      responses:
+        '200':
+          description: Session created.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionCreated'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants:
+    get:
+      operationId: listTenants
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: Tenant page.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TenantList'}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: createTenant
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CSRFToken'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TenantCreate'}
+      responses:
+        '201':
+          description: Tenant created.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Tenant'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}:
+    parameters:
+      - {$ref: '#/components/parameters/TenantID'}
+    get:
+      operationId: getTenant
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200':
+          description: Tenant.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Tenant'}
+        '404': {$ref: '#/components/responses/Error'}
+    patch:
+      operationId: updateTenant
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CSRFToken'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TenantPatch'}
+      responses:
+        '200':
+          description: Tenant updated.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Tenant'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}/members:
+    parameters:
+      - {$ref: '#/components/parameters/TenantID'}
+    get:
+      operationId: listMembers
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: Membership page.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MembershipList'}
+        '403': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: addMember
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CSRFToken'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [user_id]
+              properties:
+                user_id: {$ref: '#/components/schemas/UUID'}
+      responses:
+        '201':
+          description: Membership created.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Membership'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}/members/{membership_id}:
+    parameters:
+      - {$ref: '#/components/parameters/TenantID'}
+      - {$ref: '#/components/parameters/MembershipID'}
+    delete:
+      operationId: removeMember
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CSRFToken'}
+      responses:
+        '204': {description: Membership removed.}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}/role-bindings:
+    parameters:
+      - {$ref: '#/components/parameters/TenantID'}
+    get:
+      operationId: listRoleBindings
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: Role binding page.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RoleBindingList'}
+        '403': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: grantRole
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CSRFToken'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [membership_id, role]
+              properties:
+                membership_id: {$ref: '#/components/schemas/UUID'}
+                role: {$ref: '#/components/schemas/TenantRole'}
+      responses:
+        '201':
+          description: Role binding created.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RoleBinding'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}/role-bindings/{binding_id}:
+    parameters:
+      - {$ref: '#/components/parameters/TenantID'}
+      - {$ref: '#/components/parameters/BindingID'}
+    delete:
+      operationId: revokeRole
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CSRFToken'}
+      responses:
+        '204': {description: Role binding removed.}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/v1/service-identities:
+    get:
+      operationId: listServiceIdentities
+      tags: [service-identities]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/TenantIDQuery'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: Service identity page.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceIdentityList'}
+        '403': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: createServiceIdentity
+      tags: [service-identities]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CSRFToken'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ServiceIdentityCreate'}
+      responses:
+        '201':
+          description: Identity and initial one-time token.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [service_identity, token]
+                properties:
+                  service_identity: {$ref: '#/components/schemas/ServiceIdentity'}
+                  token: {$ref: '#/components/schemas/TokenCreated'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/service-identities/{id}/tokens:
+    parameters:
+      - {$ref: '#/components/parameters/ServiceIdentityID'}
+      - {$ref: '#/components/parameters/TenantIDQuery'}
+    post:
+      operationId: issueServiceToken
+      tags: [service-identities]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CSRFToken'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TokenIssue'}
+      responses:
+        '201':
+          description: One-time plaintext token.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TokenCreated'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/service-identities/{id}/tokens/{token_id}:
+    parameters:
+      - {$ref: '#/components/parameters/ServiceIdentityID'}
+      - {$ref: '#/components/parameters/TokenID'}
+      - {$ref: '#/components/parameters/TenantIDQuery'}
+    delete:
+      operationId: revokeServiceToken
+      tags: [service-identities]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CSRFToken'}
+      responses:
+        '204': {description: Token revoked.}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/audit-events:
+    get:
+      operationId: listAuditEvents
+      tags: [audit]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/TenantIDQuery'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: Audit event page without high-risk details.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuditEventList'}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: ajiasu_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 255}
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      schema: {type: string}
+      description: Required for cookie-authenticated unsafe requests.
+    Cursor:
+      name: cursor
+      in: query
+      schema: {$ref: '#/components/schemas/Cursor'}
+    PageSize:
+      name: page_size
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+    TenantID:
+      name: tenant_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+    TenantIDQuery:
+      name: tenant_id
+      in: query
+      required: false
+      schema: {$ref: '#/components/schemas/UUID'}
+    MembershipID:
+      name: membership_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+    BindingID:
+      name: binding_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+    ServiceIdentityID:
+      name: id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+    TokenID:
+      name: token_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+  responses:
+    Health:
+      description: Health state.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [status]
+            properties:
+              status: {type: string, const: ok}
+    Error:
+      description: Stable API error.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorEnvelope'}
+  schemas:
+    UUID: {type: string, format: uuid}
+    RFC3339Time: {type: string, format: date-time}
+    Cursor: {type: string, minLength: 1, description: Opaque versioned base64url cursor.}
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, request_id, details]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            request_id: {$ref: '#/components/schemas/UUID'}
+            details: {type: object, additionalProperties: true}
+    TenantRole: {type: string, enum: [tenant_admin, operator, auditor, consumer]}
+    ServiceRole: {type: string, enum: [platform_admin, tenant_admin, operator, auditor, consumer]}
+    TenantState: {type: string, enum: [active, suspended, deleting]}
+    Tenant:
+      type: object
+      additionalProperties: false
+      required: [id, slug, name, state, version, created_at, updated_at]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        slug: {type: string}
+        name: {type: string}
+        state: {$ref: '#/components/schemas/TenantState'}
+        version: {type: integer, format: int64, minimum: 1}
+        created_at: {$ref: '#/components/schemas/RFC3339Time'}
+        updated_at: {$ref: '#/components/schemas/RFC3339Time'}
+    TenantCreate:
+      type: object
+      additionalProperties: false
+      required: [name, initial_admin_identity_id]
+      properties:
+        slug: {type: string}
+        name: {type: string}
+        initial_admin_identity_id: {$ref: '#/components/schemas/UUID'}
+    TenantPatch:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      properties:
+        expected_version: {type: integer, format: int64, minimum: 1}
+        name: {type: string}
+        state: {$ref: '#/components/schemas/TenantState'}
+    Membership:
+      type: object
+      required: [id, tenant_id, user_id, version, created_at, updated_at]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        tenant_id: {$ref: '#/components/schemas/UUID'}
+        user_id: {$ref: '#/components/schemas/UUID'}
+        version: {type: integer, format: int64}
+        created_at: {$ref: '#/components/schemas/RFC3339Time'}
+        updated_at: {$ref: '#/components/schemas/RFC3339Time'}
+    RoleBinding:
+      type: object
+      required: [id, tenant_id, membership_id, role, version, created_at, updated_at]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        tenant_id: {$ref: '#/components/schemas/UUID'}
+        membership_id: {$ref: '#/components/schemas/UUID'}
+        role: {$ref: '#/components/schemas/TenantRole'}
+        version: {type: integer, format: int64}
+        created_at: {$ref: '#/components/schemas/RFC3339Time'}
+        updated_at: {$ref: '#/components/schemas/RFC3339Time'}
+    ServiceIdentity:
+      type: object
+      required: [id, scope, name, version, created_at, updated_at]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        scope: {type: string, enum: [platform, tenant]}
+        tenant_id: {anyOf: [{$ref: '#/components/schemas/UUID'}, {type: 'null'}]}
+        name: {type: string}
+        disabled_at: {anyOf: [{$ref: '#/components/schemas/RFC3339Time'}, {type: 'null'}]}
+        version: {type: integer, format: int64}
+        created_at: {$ref: '#/components/schemas/RFC3339Time'}
+        updated_at: {$ref: '#/components/schemas/RFC3339Time'}
+    ServiceIdentityCreate:
+      type: object
+      additionalProperties: false
+      required: [scope, name, role]
+      properties:
+        scope: {type: string, enum: [platform, tenant]}
+        tenant_id: {anyOf: [{$ref: '#/components/schemas/UUID'}, {type: 'null'}]}
+        name: {type: string}
+        role: {$ref: '#/components/schemas/ServiceRole'}
+        source_cidr: {type: string}
+        valid_for_seconds: {type: integer, minimum: 0, maximum: 86400}
+    TokenIssue:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role: {$ref: '#/components/schemas/ServiceRole'}
+        source_cidr: {type: string}
+        valid_for_seconds: {type: integer, minimum: 0, maximum: 86400}
+    TokenCreated:
+      type: object
+      required: [id, service_identity_id, scope, prefix, role, expires_at, created_at, token]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        service_identity_id: {$ref: '#/components/schemas/UUID'}
+        scope: {type: string, enum: [platform, tenant]}
+        tenant_id: {anyOf: [{$ref: '#/components/schemas/UUID'}, {type: 'null'}]}
+        prefix: {type: string, minLength: 12, maxLength: 12}
+        role: {$ref: '#/components/schemas/ServiceRole'}
+        source_cidr: {type: string}
+        expires_at: {$ref: '#/components/schemas/RFC3339Time'}
+        created_at: {$ref: '#/components/schemas/RFC3339Time'}
+        token: {type: string, pattern: '^ajs_[A-Za-z0-9_-]{12}_[A-Za-z0-9_-]{43}$'}
+    Session:
+      type: object
+      required: [actor_id, actor_type, platform_roles, tenant_roles]
+      properties:
+        actor_id: {$ref: '#/components/schemas/UUID'}
+        actor_type: {type: string}
+        platform_roles: {type: array, items: {type: string}}
+        tenant_roles: {type: object, additionalProperties: {type: array, items: {type: string}}}
+    SessionCreated:
+      type: object
+      required: [identity_id, session_id, csrf_token, idle_expires_at, absolute_expires_at]
+      properties:
+        identity_id: {$ref: '#/components/schemas/UUID'}
+        display_name: {type: string}
+        session_id: {$ref: '#/components/schemas/UUID'}
+        csrf_token: {type: string}
+        idle_expires_at: {$ref: '#/components/schemas/RFC3339Time'}
+        absolute_expires_at: {$ref: '#/components/schemas/RFC3339Time'}
+    AuditEvent:
+      type: object
+      required: [id, actor_type, action, resource_type, result, source_ip, user_agent, request_id, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        tenant_id: {anyOf: [{$ref: '#/components/schemas/UUID'}, {type: 'null'}]}
+        actor_type: {type: string}
+        actor_id: {anyOf: [{$ref: '#/components/schemas/UUID'}, {type: 'null'}]}
+        action: {type: string}
+        resource_type: {type: string}
+        resource_id: {anyOf: [{$ref: '#/components/schemas/UUID'}, {type: 'null'}]}
+        result: {type: string}
+        source_ip: {type: string}
+        user_agent: {type: string}
+        request_id: {$ref: '#/components/schemas/UUID'}
+        created_at: {$ref: '#/components/schemas/RFC3339Time'}
+    TenantList: {$ref: '#/components/schemas/TenantPage'}
+    TenantPage:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Tenant'}}
+        next_cursor: {$ref: '#/components/schemas/Cursor'}
+    MembershipList:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Membership'}}
+        next_cursor: {$ref: '#/components/schemas/Cursor'}
+    RoleBindingList:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/RoleBinding'}}
+        next_cursor: {$ref: '#/components/schemas/Cursor'}
+    ServiceIdentityList:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/ServiceIdentity'}}
+        next_cursor: {$ref: '#/components/schemas/Cursor'}
+    AuditEventList:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/AuditEvent'}}
+        next_cursor: {$ref: '#/components/schemas/Cursor'}

@@ -236,6 +236,146 @@ func (q *Queries) GetTenantByID(ctx context.Context, id uuid.UUID) (TenancyTenan
 	return i, err
 }
 
+const listMemberships = `-- name: ListMemberships :many
+SELECT id, tenant_id, identity_id, version, created_at, updated_at, identity_tenant_eligible
+FROM tenancy.memberships
+WHERE tenant_id = $1
+  AND (created_at, id) > ($2::timestamptz, $3::uuid)
+ORDER BY created_at, id
+LIMIT $4
+`
+
+type ListMembershipsParams struct {
+	TenantID       uuid.UUID
+	AfterCreatedAt time.Time
+	AfterID        uuid.UUID
+	PageSize       int32
+}
+
+func (q *Queries) ListMemberships(ctx context.Context, arg ListMembershipsParams) ([]TenancyMembership, error) {
+	rows, err := q.db.Query(ctx, listMemberships,
+		arg.TenantID,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TenancyMembership
+	for rows.Next() {
+		var i TenancyMembership
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.IdentityID,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.IdentityTenantEligible,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRoleBindings = `-- name: ListRoleBindings :many
+SELECT id, tenant_id, membership_id, role, version, created_at, updated_at
+FROM tenancy.role_bindings
+WHERE tenant_id = $1
+  AND (created_at, id) > ($2::timestamptz, $3::uuid)
+ORDER BY created_at, id
+LIMIT $4
+`
+
+type ListRoleBindingsParams struct {
+	TenantID       uuid.UUID
+	AfterCreatedAt time.Time
+	AfterID        uuid.UUID
+	PageSize       int32
+}
+
+func (q *Queries) ListRoleBindings(ctx context.Context, arg ListRoleBindingsParams) ([]TenancyRoleBinding, error) {
+	rows, err := q.db.Query(ctx, listRoleBindings,
+		arg.TenantID,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TenancyRoleBinding
+	for rows.Next() {
+		var i TenancyRoleBinding
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.MembershipID,
+			&i.Role,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTenants = `-- name: ListTenants :many
+SELECT id, slug, name, state, version, created_at, updated_at
+FROM tenancy.tenants
+WHERE (created_at, id) > ($1::timestamptz, $2::uuid)
+ORDER BY created_at, id
+LIMIT $3
+`
+
+type ListTenantsParams struct {
+	AfterCreatedAt time.Time
+	AfterID        uuid.UUID
+	PageSize       int32
+}
+
+func (q *Queries) ListTenants(ctx context.Context, arg ListTenantsParams) ([]TenancyTenant, error) {
+	rows, err := q.db.Query(ctx, listTenants, arg.AfterCreatedAt, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TenancyTenant
+	for rows.Next() {
+		var i TenancyTenant
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Name,
+			&i.State,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockTenant = `-- name: LockTenant :exec
 SELECT pg_advisory_xact_lock(hashtextextended('ajiasu-tenant:' || $1::uuid::text, 0))
 `

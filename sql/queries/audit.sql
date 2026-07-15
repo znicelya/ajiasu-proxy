@@ -53,6 +53,15 @@ SELECT sqlc.arg(outbox_id),
        sqlc.arg(available_at)
 FROM inserted_audit;
 
+-- name: ListAuditEvents :many
+SELECT id, tenant_id, actor_type, actor_id, action, resource_type, resource_id,
+       result, source_ip, user_agent, request_id, created_at
+FROM audit.audit_events
+WHERE (sqlc.narg(tenant_id)::uuid IS NULL OR tenant_id = sqlc.narg(tenant_id))
+  AND (created_at, id) > (sqlc.arg(after_created_at)::timestamptz, sqlc.arg(after_id)::uuid)
+ORDER BY created_at, id
+LIMIT sqlc.arg(page_size);
+
 -- name: LeaseOutboxEvents :many
 WITH candidates AS (
     SELECT id

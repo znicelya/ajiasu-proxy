@@ -32,4 +32,16 @@ if (-not $content.Contains("Invoke-NativeCommand -FilePath 'go' -Arguments @('to
     throw 'control-plane CI must reject stale sqlc-generated files'
 }
 
+if (-not $content.Contains("'--file', 'Dockerfile.control-plane'")) {
+    throw 'control-plane CI must build the control-plane image'
+}
+
+if (-not $content.Contains("'--platform', 'linux/amd64,linux/arm64'")) {
+    throw 'control-plane CI must build both supported architectures'
+}
+
+if (-not $content.Contains("'--output', 'type=cacheonly', '.'")) {
+    throw 'control-plane CI must verify the multiarch image without publishing it'
+}
+
 Write-Output 'control-plane CI fixture tests passed'

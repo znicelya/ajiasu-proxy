@@ -24,6 +24,10 @@ func getTenant(ctx context.Context, executor dbgen.DBTX, tenantID uuid.UUID) (db
 	return dbgen.New(executor).GetTenantByID(ctx, tenantID)
 }
 
+func listTenants(ctx context.Context, executor dbgen.DBTX, after time.Time, afterID uuid.UUID, pageSize int32) ([]dbgen.TenancyTenant, error) {
+	return dbgen.New(executor).ListTenants(ctx, dbgen.ListTenantsParams{AfterCreatedAt: after, AfterID: afterID, PageSize: pageSize})
+}
+
 func lockTenant(ctx context.Context, executor dbgen.DBTX, tenantID uuid.UUID) error {
 	return dbgen.New(executor).LockTenant(ctx, tenantID)
 }
@@ -54,6 +58,10 @@ func getMembership(ctx context.Context, executor dbgen.DBTX, membershipID uuid.U
 	return dbgen.New(executor).GetMembershipByID(ctx, membershipID)
 }
 
+func listMemberships(ctx context.Context, executor dbgen.DBTX, tenantID uuid.UUID, after time.Time, afterID uuid.UUID, pageSize int32) ([]dbgen.TenancyMembership, error) {
+	return dbgen.New(executor).ListMemberships(ctx, dbgen.ListMembershipsParams{TenantID: tenantID, AfterCreatedAt: after, AfterID: afterID, PageSize: pageSize})
+}
+
 func deleteMembership(ctx context.Context, executor dbgen.DBTX, membershipID uuid.UUID) (int64, error) {
 	return dbgen.New(executor).DeleteMembership(ctx, membershipID)
 }
@@ -64,6 +72,10 @@ func createRoleBinding(ctx context.Context, executor dbgen.DBTX, bindingID, tena
 
 func getRoleBinding(ctx context.Context, executor dbgen.DBTX, bindingID uuid.UUID) (dbgen.TenancyRoleBinding, error) {
 	return dbgen.New(executor).GetRoleBindingByID(ctx, bindingID)
+}
+
+func listRoleBindings(ctx context.Context, executor dbgen.DBTX, tenantID uuid.UUID, after time.Time, afterID uuid.UUID, pageSize int32) ([]dbgen.TenancyRoleBinding, error) {
+	return dbgen.New(executor).ListRoleBindings(ctx, dbgen.ListRoleBindingsParams{TenantID: tenantID, AfterCreatedAt: after, AfterID: afterID, PageSize: pageSize})
 }
 
 func countTenantAdminBindings(ctx context.Context, executor dbgen.DBTX, tenantID uuid.UUID) (int64, error) {

@@ -51,6 +51,15 @@ func NewSessionService(pools *database.Pools, auditService audit.Service, cookie
 	return &SessionService{pools: pools, audit: auditService, now: func() time.Time { return time.Now().UTC() }, idleTimeout: 30 * time.Minute, absoluteTimeout: 12 * time.Hour, cookie: cookie}, nil
 }
 
+func (s *SessionService) ConfigureTimeouts(idle, absolute time.Duration) error {
+	if s == nil || idle <= 0 || absolute <= 0 || idle > absolute {
+		return ErrInvalidArgument
+	}
+	s.idleTimeout = idle
+	s.absoluteTimeout = absolute
+	return nil
+}
+
 func (s *SessionService) CreateSession(ctx context.Context, identityID uuid.UUID) (Session, SessionToken, *http.Cookie, error) {
 	if identityID == uuid.Nil {
 		return Session{}, SessionToken{}, nil, ErrInvalidArgument
@@ -177,12 +186,19 @@ func (s *SessionService) RotateSession(ctx context.Context, plaintext string) (S
 }
 
 func (s *SessionService) RevokeSession(ctx context.Context, plaintext string) error {
+	return s.RevokeSessionAs(ctx, plaintext, uuid.New())
+}
+
+func (s *SessionService) RevokeSessionAs(ctx context.Context, plaintext string, actorID uuid.UUID) error {
 	if plaintext == "" {
 		return ErrSessionNotFound
 	}
+	if actorID == uuid.Nil {
+		return ErrInvalidArgument
+	}
 	d := DigestSessionToken(plaintext)
 	now := s.now().UTC()
-	_, err := database.InPlatformTx(ctx, s.pools.Platform, uuid.New(), func(ctx context.Context, tx pgx.Tx) (struct{}, error) {
+	_, err := database.InPlatformTx(ctx, s.pools.Platform, actorID, func(ctx context.Context, tx pgx.Tx) (struct{}, error) {
 		q := dbgen.New(tx)
 		row, err := q.GetAuthSessionByDigestForUpdate(ctx, d[:])
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -270,6 +286,13 @@ func NewOIDCService(pools *database.Pools, ring keyring.Keyring, provider OIDCPr
 		auditService = audit.NewService()
 	}
 	return &OIDCService{pools: pools, ring: ring, provider: provider, audit: auditService, sessions: ss, now: func() time.Time { return time.Now().UTC() }}, nil
+}
+
+func (s *OIDCService) ConfigureSessionTimeouts(idle, absolute time.Duration) error {
+	if s == nil || s.sessions == nil {
+		return ErrInvalidArgument
+	}
+	return s.sessions.ConfigureTimeouts(idle, absolute)
 }
 
 func (s *OIDCService) BeginOIDC(ctx context.Context, req BeginOIDCRequest) (BeginOIDCResult, error) {

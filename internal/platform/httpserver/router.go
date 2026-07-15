@@ -13,9 +13,16 @@ type Readiness interface {
 	Check(context.Context) error
 }
 
+type ModuleRoutes interface {
+	RegisterPublicRoutes(chi.Router)
+	RegisterProtectedRoutes(chi.Router)
+}
+
 type Dependencies struct {
-	Logger    *slog.Logger
-	Readiness Readiness
+	Logger       *slog.Logger
+	Readiness    Readiness
+	Modules      []ModuleRoutes
+	Authenticate func(http.Handler) http.Handler
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -38,6 +45,23 @@ func NewRouter(deps Dependencies) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	router.Route("/api/v1", func(api chi.Router) {
+		for _, module := range deps.Modules {
+			if module != nil {
+				module.RegisterPublicRoutes(api)
+			}
+		}
+		api.Group(func(protected chi.Router) {
+			if deps.Authenticate != nil {
+				protected.Use(deps.Authenticate)
+			}
+			for _, module := range deps.Modules {
+				if module != nil {
+					module.RegisterProtectedRoutes(protected)
+				}
+			}
+		})
 	})
 	return router
 }

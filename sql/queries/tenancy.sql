@@ -12,6 +12,13 @@ SELECT EXISTS (
 -- name: GetTenantByID :one
 SELECT id, slug, name, state, version, created_at, updated_at FROM tenancy.tenants WHERE id = sqlc.arg(id);
 
+-- name: ListTenants :many
+SELECT id, slug, name, state, version, created_at, updated_at
+FROM tenancy.tenants
+WHERE (created_at, id) > (sqlc.arg(after_created_at)::timestamptz, sqlc.arg(after_id)::uuid)
+ORDER BY created_at, id
+LIMIT sqlc.arg(page_size);
+
 -- name: LockTenant :exec
 SELECT pg_advisory_xact_lock(hashtextextended('ajiasu-tenant:' || sqlc.arg(tenant_id)::uuid::text, 0));
 
@@ -34,6 +41,14 @@ RETURNING id, tenant_id, identity_id, version, created_at, updated_at, identity_
 SELECT id, tenant_id, identity_id, version, created_at, updated_at, identity_tenant_eligible
 FROM tenancy.memberships WHERE id = sqlc.arg(id);
 
+-- name: ListMemberships :many
+SELECT id, tenant_id, identity_id, version, created_at, updated_at, identity_tenant_eligible
+FROM tenancy.memberships
+WHERE tenant_id = sqlc.arg(tenant_id)
+  AND (created_at, id) > (sqlc.arg(after_created_at)::timestamptz, sqlc.arg(after_id)::uuid)
+ORDER BY created_at, id
+LIMIT sqlc.arg(page_size);
+
 -- name: DeleteMembership :execrows
 DELETE FROM tenancy.memberships WHERE id = sqlc.arg(id);
 
@@ -44,6 +59,14 @@ RETURNING id, tenant_id, membership_id, role, version, created_at, updated_at;
 
 -- name: GetRoleBindingByID :one
 SELECT id, tenant_id, membership_id, role, version, created_at, updated_at FROM tenancy.role_bindings WHERE id = sqlc.arg(id);
+
+-- name: ListRoleBindings :many
+SELECT id, tenant_id, membership_id, role, version, created_at, updated_at
+FROM tenancy.role_bindings
+WHERE tenant_id = sqlc.arg(tenant_id)
+  AND (created_at, id) > (sqlc.arg(after_created_at)::timestamptz, sqlc.arg(after_id)::uuid)
+ORDER BY created_at, id
+LIMIT sqlc.arg(page_size);
 
 -- name: CountTenantAdminBindings :one
 SELECT count(*)
