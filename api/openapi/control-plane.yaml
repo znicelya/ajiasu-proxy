@@ -380,6 +380,150 @@ paths:
               schema: {$ref: '#/components/schemas/AuditEventList'}
         '400': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}/accounts:
+    parameters: [{$ref: '#/components/parameters/TenantID'}]
+    get:
+      operationId: listAccounts
+      tags: [accounts]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/PageSize'}]
+      responses:
+        '200': {description: Account page., content: {application/json: {schema: {$ref: '#/components/schemas/AccountList'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: createAccount
+      tags: [accounts]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AccountCreate'}}}}
+      responses:
+        '201': {description: Account created without plaintext credential., content: {application/json: {schema: {$ref: '#/components/schemas/Account'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}/accounts/bulk-import:
+    parameters: [{$ref: '#/components/parameters/TenantID'}]
+    post:
+      operationId: bulkImportAccounts
+      tags: [accounts]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, additionalProperties: false, required: [items], properties: {items: {type: array, minItems: 1, maxItems: 100, items: {$ref: '#/components/schemas/AccountCreate'}}}}}}
+      responses:
+        '200': {description: Ordered per-item results., content: {application/json: {schema: {$ref: '#/components/schemas/BulkImportResultList'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}/accounts/{account_id}:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/AccountID'}]
+    get:
+      operationId: getAccount
+      tags: [accounts]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Safe account metadata., content: {application/json: {schema: {$ref: '#/components/schemas/Account'}}}}
+        '404': {$ref: '#/components/responses/Error'}
+    patch:
+      operationId: updateAccount
+      tags: [accounts]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AccountPatch'}}}}
+      responses:
+        '200': {description: Account updated., content: {application/json: {schema: {$ref: '#/components/schemas/Account'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}/accounts/{account_id}/credentials/rotate:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/AccountID'}]
+    post:
+      operationId: rotateAccountCredential
+      tags: [accounts]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: false, required: [credential], properties: {credential: {$ref: '#/components/schemas/CredentialInput'}}}}}}
+      responses:
+        '201': {description: Safe credential version metadata., content: {application/json: {schema: {$ref: '#/components/schemas/CredentialMetadata'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}/account-pools:
+    parameters: [{$ref: '#/components/parameters/TenantID'}]
+    get:
+      operationId: listAccountPools
+      tags: [account-pools]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/PageSize'}]
+      responses:
+        '200': {description: Pool page., content: {application/json: {schema: {$ref: '#/components/schemas/PoolList'}}}}
+    post:
+      operationId: createAccountPool
+      tags: [account-pools]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PoolCreate'}}}}
+      responses:
+        '201': {description: Pool created., content: {application/json: {schema: {$ref: '#/components/schemas/Pool'}}}}
+  /api/v1/tenants/{tenant_id}/account-pools/{pool_id}:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/PoolID'}]
+    get:
+      operationId: getAccountPool
+      tags: [account-pools]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Pool., content: {application/json: {schema: {$ref: '#/components/schemas/Pool'}}}}
+    patch:
+      operationId: updateAccountPool
+      tags: [account-pools]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PoolPatch'}}}}
+      responses:
+        '200': {description: Pool updated., content: {application/json: {schema: {$ref: '#/components/schemas/Pool'}}}}
+  /api/v1/tenants/{tenant_id}/account-pools/{pool_id}/members:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/PoolID'}]
+    get:
+      operationId: listPoolMembers
+      tags: [account-pools]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/PageSize'}]
+      responses:
+        '200': {description: Membership page., content: {application/json: {schema: {$ref: '#/components/schemas/PoolMembershipList'}}}}
+    post:
+      operationId: addPoolMember
+      tags: [account-pools]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PoolMembershipCreate'}}}}
+      responses:
+        '201': {description: Membership created., content: {application/json: {schema: {$ref: '#/components/schemas/PoolMembership'}}}}
+  /api/v1/tenants/{tenant_id}/account-pools/{pool_id}/members/{membership_id}:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/PoolID'}, {$ref: '#/components/parameters/MembershipID'}]
+    delete:
+      operationId: removePoolMember
+      tags: [account-pools]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      responses:
+        '204': {description: Membership removed.}
+  /api/v1/tenants/{tenant_id}/account-pools/{pool_id}/capacity:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/PoolID'}]
+    get:
+      operationId: getPoolCapacity
+      tags: [account-pools]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Transactional capacity summary., content: {application/json: {schema: {$ref: '#/components/schemas/PoolCapacity'}}}}
+  /api/v1/tenants/{tenant_id}/quota:
+    parameters: [{$ref: '#/components/parameters/TenantID'}]
+    get:
+      operationId: getTenantQuota
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Tenant quota., content: {application/json: {schema: {$ref: '#/components/schemas/TenantQuota'}}}}
+    patch:
+      operationId: updateTenantQuota
+      tags: [tenants]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TenantQuotaPatch'}}}}
+      responses:
+        '200': {description: Tenant quota updated., content: {application/json: {schema: {$ref: '#/components/schemas/TenantQuota'}}}}
 components:
   securitySchemes:
     cookieAuth:
@@ -430,6 +574,16 @@ components:
       in: path
       required: true
       schema: {$ref: '#/components/schemas/UUID'}
+    AccountID:
+      name: account_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+    PoolID:
+      name: pool_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
     ServiceIdentityID:
       name: id
       in: path
@@ -456,6 +610,43 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/ErrorEnvelope'}
   schemas:
+    CredentialInput:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties: {username: {type: string, minLength: 1, maxLength: 512}, password: {type: string, minLength: 1, maxLength: 8192, writeOnly: true}}
+    CredentialMetadata:
+      type: object
+      additionalProperties: false
+      required: [version, provider, created_at]
+      properties: {version: {type: integer, format: int64, minimum: 1}, provider: {type: string, enum: [envelope, vault, kms]}, created_at: {$ref: '#/components/schemas/RFC3339Time'}, retired_at: {anyOf: [{$ref: '#/components/schemas/RFC3339Time'}, {type: 'null'}]}}
+    AccountCreate:
+      type: object
+      additionalProperties: false
+      required: [name, credential]
+      properties: {name: {type: string, minLength: 1, maxLength: 200}, membership_id: {type: string, maxLength: 512}, membership_expires_at: {$ref: '#/components/schemas/RFC3339Time'}, labels: {type: object, additionalProperties: {type: string}}, max_concurrency: {type: integer, minimum: 1, maximum: 32, default: 1}, credential: {$ref: '#/components/schemas/CredentialInput'}}
+    AccountPatch:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      properties: {expected_version: {type: integer, format: int64, minimum: 1}, name: {type: string}, state: {type: string, enum: [active, disabled, deleting]}, labels: {type: object, additionalProperties: {type: string}}, max_concurrency: {type: integer, minimum: 1, maximum: 32}}
+    Account:
+      type: object
+      additionalProperties: false
+      required: [id, tenant_id, name, state, health, labels, max_concurrency, version, credential, created_at, updated_at]
+      properties: {id: {$ref: '#/components/schemas/UUID'}, tenant_id: {$ref: '#/components/schemas/UUID'}, name: {type: string}, state: {type: string}, health: {type: string}, membership_id: {type: string}, membership_expires_at: {$ref: '#/components/schemas/RFC3339Time'}, labels: {type: object, additionalProperties: {type: string}}, max_concurrency: {type: integer}, version: {type: integer, format: int64}, credential: {$ref: '#/components/schemas/CredentialMetadata'}, created_at: {$ref: '#/components/schemas/RFC3339Time'}, updated_at: {$ref: '#/components/schemas/RFC3339Time'}}
+    AccountList: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/Account'}}, next_cursor: {$ref: '#/components/schemas/Cursor'}}}
+    BulkImportResultList: {type: object, required: [items], properties: {items: {type: array, items: {type: object, required: [index, code, message], properties: {index: {type: integer}, account_id: {$ref: '#/components/schemas/UUID'}, code: {type: string}, message: {type: string}}}}}}
+    PoolCreate: {type: object, additionalProperties: false, required: [name, strategy], properties: {name: {type: string}, strategy: {type: string, enum: [least_connections, round_robin, fixed_priority]}, selector: {type: object, additionalProperties: {type: string}}}}
+    PoolPatch: {type: object, additionalProperties: false, required: [expected_version], properties: {expected_version: {type: integer, format: int64}, name: {type: string}, strategy: {type: string, enum: [least_connections, round_robin, fixed_priority]}, selector: {type: object, additionalProperties: {type: string}}, state: {type: string, enum: [active, disabled, deleting]}}}
+    Pool: {type: object, required: [id, tenant_id, name, strategy, selector, state, version, created_at, updated_at], properties: {id: {$ref: '#/components/schemas/UUID'}, tenant_id: {$ref: '#/components/schemas/UUID'}, name: {type: string}, strategy: {type: string}, selector: {type: object, additionalProperties: {type: string}}, state: {type: string}, version: {type: integer, format: int64}, created_at: {$ref: '#/components/schemas/RFC3339Time'}, updated_at: {$ref: '#/components/schemas/RFC3339Time'}}}
+    PoolList: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/Pool'}}, next_cursor: {$ref: '#/components/schemas/Cursor'}}}
+    PoolMembershipCreate: {type: object, additionalProperties: false, required: [account_id], properties: {account_id: {$ref: '#/components/schemas/UUID'}, priority: {type: integer, minimum: 0, maximum: 1000}, weight: {type: integer, minimum: 1, maximum: 100}, enabled: {type: boolean}, expires_at: {$ref: '#/components/schemas/RFC3339Time'}}}
+    PoolMembership: {type: object, required: [id, tenant_id, pool_id, account_id, priority, weight, enabled, created_at, updated_at], properties: {id: {$ref: '#/components/schemas/UUID'}, tenant_id: {$ref: '#/components/schemas/UUID'}, pool_id: {$ref: '#/components/schemas/UUID'}, account_id: {$ref: '#/components/schemas/UUID'}, priority: {type: integer}, weight: {type: integer}, enabled: {type: boolean}, expires_at: {$ref: '#/components/schemas/RFC3339Time'}, created_at: {$ref: '#/components/schemas/RFC3339Time'}, updated_at: {$ref: '#/components/schemas/RFC3339Time'}}}
+    PoolMembershipList: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/PoolMembership'}}, next_cursor: {$ref: '#/components/schemas/Cursor'}}}
+    PoolCapacity: {type: object, required: [pool_id, total_members, eligible_members, total_concurrency, reserved_concurrency, available_concurrency], properties: {pool_id: {$ref: '#/components/schemas/UUID'}, total_members: {type: integer}, eligible_members: {type: integer}, total_concurrency: {type: integer}, reserved_concurrency: {type: integer}, available_concurrency: {type: integer}}}
+    TenantQuota: {type: object, required: [tenant_id, max_accounts, max_pools, max_pool_memberships, version, created_at, updated_at], properties: {tenant_id: {$ref: '#/components/schemas/UUID'}, max_accounts: {type: integer}, max_pools: {type: integer}, max_pool_memberships: {type: integer}, version: {type: integer, format: int64}, created_at: {$ref: '#/components/schemas/RFC3339Time'}, updated_at: {$ref: '#/components/schemas/RFC3339Time'}}}
+    TenantQuotaPatch: {type: object, additionalProperties: false, required: [expected_version], properties: {expected_version: {type: integer, format: int64}, max_accounts: {type: integer, minimum: 1, maximum: 1000}, max_pools: {type: integer, minimum: 1, maximum: 500}, max_pool_memberships: {type: integer, minimum: 1, maximum: 10000}}}
     UUID: {type: string, format: uuid}
     RFC3339Time: {type: string, format: date-time}
     Cursor: {type: string, minLength: 1, description: Opaque versioned base64url cursor.}

@@ -16,6 +16,11 @@ func createTenant(ctx context.Context, executor dbgen.DBTX, tenantID uuid.UUID, 
 	return dbgen.New(executor).CreateTenant(ctx, dbgen.CreateTenantParams{ID: tenantID, Slug: slug, Name: name, CreatedAt: now, UpdatedAt: now})
 }
 
+func createDefaultQuota(ctx context.Context, executor dbgen.DBTX, tenantID uuid.UUID, now time.Time) error {
+	_, err := executor.Exec(ctx, `INSERT INTO tenancy.tenant_quotas (tenant_id, created_at, updated_at) VALUES ($1, $2, $2)`, tenantID, now)
+	return err
+}
+
 func userIdentityExists(ctx context.Context, executor dbgen.DBTX, identityID uuid.UUID) (bool, error) {
 	return dbgen.New(executor).UserIdentityExists(ctx, identityID)
 }

@@ -39,6 +39,43 @@ func (h *HTTPHandler) RegisterProtectedRoutes(router chi.Router) {
 	router.Get("/tenants/{tenant_id}/role-bindings", h.listRoleBindings)
 	router.Post("/tenants/{tenant_id}/role-bindings", h.grantRole)
 	router.Delete("/tenants/{tenant_id}/role-bindings/{binding_id}", h.revokeRole)
+	router.Get("/tenants/{tenant_id}/quota", h.getQuota)
+	router.Patch("/tenants/{tenant_id}/quota", h.updateQuota)
+}
+
+func (h *HTTPHandler) getQuota(w http.ResponseWriter, r *http.Request) {
+	_, actor, _, ok := h.tenantActor(w, r)
+	if !ok {
+		return
+	}
+	quota, err := h.service.GetQuota(r.Context(), actor)
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusOK, quota)
+}
+
+func (h *HTTPHandler) updateQuota(w http.ResponseWriter, r *http.Request) {
+	principal, actor, tenantID, ok := h.tenantActor(w, r)
+	if !ok {
+		return
+	}
+	var request UpdateQuota
+	body, err := httpserver.DecodeJSONBytes(r, &request)
+	if err != nil {
+		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request_body", "request body is invalid", nil)
+		return
+	}
+	response, _, err := h.idempotency.ExecuteJSON(r.Context(), httpserver.IdempotencyRequest{Scope: httpserver.IdempotencyScopeTenant, TenantID: &tenantID, ActorID: principal.ActorID, Method: r.Method, CanonicalRoute: "/api/v1/tenants/{tenant_id}/quota", Key: r.Header.Get("Idempotency-Key"), Body: body}, func(ctx context.Context) (int, any, error) {
+		value, err := h.service.UpdateQuota(ctx, actor, request)
+		return http.StatusOK, value, err
+	})
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	httpserver.WriteStoredResponse(w, response)
 }
 
 type tenantResponse struct {

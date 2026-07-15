@@ -133,6 +133,9 @@ func (s *Service) CreateTenant(ctx context.Context, actor PlatformActor, command
 		if err != nil {
 			return struct{}{}, mapStorageError(err)
 		}
+		if err := createDefaultQuota(ctx, tx, tenantID, now); err != nil {
+			return struct{}{}, mapStorageError(err)
+		}
 		if _, err := createMembership(ctx, tx, membershipID, tenantID, command.InitialAdminIdentityID, now); err != nil {
 			return struct{}{}, mapStorageError(err)
 		}
