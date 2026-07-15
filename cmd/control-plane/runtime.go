@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-const supportedSchemaVersion int64 = 9
+const supportedSchemaVersion int64 = 10
 
 var errSchemaIncompatible = errors.New("schema version is incompatible")
 

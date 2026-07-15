@@ -82,7 +82,7 @@ type EndpointsEndpointStatus struct {
 	EndpointID             uuid.UUID
 	ObservedGeneration     int64
 	ObservedState          string
-	RunnerID               *uuid.UUID
+	RunnerID               pgtype.UUID
 	ReasonCode             string
 	LastAgentObservationAt *time.Time
 	LastTransitionAt       time.Time
@@ -126,7 +126,7 @@ type GatewaysEnrollment struct {
 	CreatedBy              uuid.UUID
 	ExpiresAt              time.Time
 	ConsumedAt             *time.Time
-	ConsumedGatewayID      *uuid.UUID
+	ConsumedGatewayID      pgtype.UUID
 	RevokedAt              *time.Time
 	CreatedAt              time.Time
 }
@@ -216,7 +216,7 @@ type NodesNodeEnrollment struct {
 	CreatedBy        uuid.UUID
 	ExpiresAt        time.Time
 	ConsumedAt       *time.Time
-	ConsumedNodeID   *uuid.UUID
+	ConsumedNodeID   pgtype.UUID
 	RevokedAt        *time.Time
 	CreatedAt        time.Time
 }
@@ -237,7 +237,7 @@ type NodesNodeSession struct {
 
 type OperationsOperation struct {
 	ID                  uuid.UUID
-	TenantID            *uuid.UUID
+	TenantID            pgtype.UUID
 	OperationType       string
 	ResourceType        string
 	ResourceID          uuid.UUID
@@ -298,7 +298,7 @@ type ReconcilerRunnerDesiredState struct {
 	DesiredGeneration     int64
 	DesiredAction         string
 	OperationID           uuid.UUID
-	CapacityReservationID *uuid.UUID
+	CapacityReservationID pgtype.UUID
 	RuntimeSpec           []byte
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
@@ -321,14 +321,14 @@ type ReconcilerRunnerObservation struct {
 
 type ReconcilerWorkItem struct {
 	ID             uuid.UUID
-	TenantID       *uuid.UUID
+	TenantID       pgtype.UUID
 	ResourceType   string
 	ResourceID     uuid.UUID
 	Action         string
 	Generation     int64
 	OperationID    uuid.UUID
 	AvailableAt    time.Time
-	LeaseOwner     *uuid.UUID
+	LeaseOwner     pgtype.UUID
 	LeaseDeadline  *time.Time
 	Attempts       int32
 	LastResultCode string
