@@ -667,6 +667,51 @@ paths:
       parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EndpointAction'}}}}
       responses: {'202': {description: Endpoint rebuild queued., content: {application/json: {schema: {$ref: '#/components/schemas/EndpointOperation'}}}}, '409': {$ref: '#/components/responses/Error'}}
+  /api/v1/tenants/{tenant_id}/endpoints/{endpoint_id}/proxy-credentials:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/EndpointID'}]
+    get:
+      operationId: listProxyCredentials
+      tags: [proxy-access]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses: {'200': {description: Proxy credentials., content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/ProxyCredential'}}}}}}}}
+    post:
+      operationId: createProxyCredential
+      tags: [proxy-access]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {expires_at: {$ref: '#/components/schemas/RFC3339Time'}}}}}}
+      responses: {'201': {description: Credential and one-time password., content: {application/json: {schema: {$ref: '#/components/schemas/IssuedProxyCredential'}}}}, '409': {$ref: '#/components/responses/Error'}}
+  /api/v1/tenants/{tenant_id}/endpoints/{endpoint_id}/proxy-credentials/{credential_id}/rotate:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/EndpointID'}, {name: credential_id, in: path, required: true, schema: {$ref: '#/components/schemas/UUID'}}]
+    post:
+      operationId: rotateProxyCredential
+      tags: [proxy-access]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {expires_at: {$ref: '#/components/schemas/RFC3339Time'}}}}}}
+      responses: {'201': {description: Rotated credential and one-time password., content: {application/json: {schema: {$ref: '#/components/schemas/IssuedProxyCredential'}}}}, '409': {$ref: '#/components/responses/Error'}}
+  /api/v1/tenants/{tenant_id}/endpoints/{endpoint_id}/proxy-credentials/{credential_id}:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/EndpointID'}, {name: credential_id, in: path, required: true, schema: {$ref: '#/components/schemas/UUID'}}]
+    delete:
+      operationId: revokeProxyCredential
+      tags: [proxy-access]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      responses: {'204': {description: Credential revoked.}, '404': {$ref: '#/components/responses/Error'}}
+  /api/v1/tenants/{tenant_id}/endpoints/{endpoint_id}/access-profile:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/EndpointID'}]
+    get:
+      operationId: getAccessProfile
+      tags: [proxy-access]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses: {'200': {description: Access profile., content: {application/json: {schema: {$ref: '#/components/schemas/AccessProfile'}}}}}
+    patch:
+      operationId: updateAccessProfile
+      tags: [proxy-access]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AccessProfileUpdate'}}}}
+      responses: {'200': {description: Updated access profile., content: {application/json: {schema: {$ref: '#/components/schemas/AccessProfile'}}}}, '409': {$ref: '#/components/responses/Error'}}
   /api/v1/operations:
     get:
       operationId: listPlatformOperations
@@ -807,6 +852,10 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/ErrorEnvelope'}
   schemas:
+    ProxyCredential: {type: object, required: [id, tenant_id, endpoint_id, public_identifier, created_at, updated_at], properties: {id: {$ref: '#/components/schemas/UUID'}, tenant_id: {$ref: '#/components/schemas/UUID'}, endpoint_id: {$ref: '#/components/schemas/UUID'}, public_identifier: {type: string}, expires_at: {$ref: '#/components/schemas/RFC3339Time'}, revoked_at: {$ref: '#/components/schemas/RFC3339Time'}, created_at: {$ref: '#/components/schemas/RFC3339Time'}, updated_at: {$ref: '#/components/schemas/RFC3339Time'}}}
+    IssuedProxyCredential: {allOf: [{$ref: '#/components/schemas/ProxyCredential'}, {type: object, required: [password], properties: {password: {type: string, writeOnly: true}}}]}
+    AccessProfile: {type: object, required: [tenant_id, endpoint_id, policy, policy_hash, version, created_at, updated_at], properties: {tenant_id: {$ref: '#/components/schemas/UUID'}, endpoint_id: {$ref: '#/components/schemas/UUID'}, policy: {type: object, additionalProperties: true}, policy_hash: {type: string}, version: {type: integer, format: int64}, created_at: {$ref: '#/components/schemas/RFC3339Time'}, updated_at: {$ref: '#/components/schemas/RFC3339Time'}}}
+    AccessProfileUpdate: {type: object, additionalProperties: false, required: [policy], properties: {policy: {type: object, additionalProperties: true}, expected_version: {type: integer, format: int64, minimum: 0}}}
     NodeEnrollmentCreate: {type: object, additionalProperties: false, required: [expected_node_name, valid_for_seconds], properties: {expected_node_name: {type: string, minLength: 1, maxLength: 200}, valid_for_seconds: {type: integer, minimum: 1, maximum: 3600}}}
     NodeEnrollmentCreated: {type: object, additionalProperties: false, required: [enrollment, token], properties: {enrollment: {type: object, required: [id, expected_node_name, token_prefix, expires_at, created_at], properties: {id: {$ref: '#/components/schemas/UUID'}, expected_node_name: {type: string}, token_prefix: {type: string}, expires_at: {$ref: '#/components/schemas/RFC3339Time'}, created_at: {$ref: '#/components/schemas/RFC3339Time'}}}, token: {type: string, writeOnly: true}}}
     Node: {type: object, required: [id, name, desired_labels, observed_labels, max_runners, reserved_headroom, active_runners, maintenance_state, connectivity_state, session_generation, version, created_at, updated_at], properties: {id: {$ref: '#/components/schemas/UUID'}, name: {type: string}, desired_labels: {type: object, additionalProperties: {type: string}}, observed_labels: {type: object, additionalProperties: {type: string}}, max_runners: {type: integer}, reserved_headroom: {type: integer}, active_runners: {type: integer}, maintenance_state: {type: string, enum: [active, cordoned, draining, disabled]}, connectivity_state: {type: string, enum: [registering, online, stale, offline]}, architecture: {type: string}, agent_version: {type: string}, last_heartbeat_at: {$ref: '#/components/schemas/RFC3339Time'}, session_generation: {type: integer, format: int64}, version: {type: integer, format: int64}, created_at: {$ref: '#/components/schemas/RFC3339Time'}, updated_at: {$ref: '#/components/schemas/RFC3339Time'}}}

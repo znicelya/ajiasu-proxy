@@ -27,6 +27,7 @@ import (
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/httpserver"
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/keyring"
 	accountpools "github.com/dnomd343/ajiasu-proxy/internal/pools"
+	"github.com/dnomd343/ajiasu-proxy/internal/proxyaccess"
 	"github.com/dnomd343/ajiasu-proxy/internal/reconciler"
 	"github.com/dnomd343/ajiasu-proxy/internal/secrets"
 	"github.com/dnomd343/ajiasu-proxy/internal/tenancy"
@@ -329,6 +330,14 @@ func buildApplicationHandler(cfg config.Config, logger *slog.Logger, pools *data
 	if err != nil {
 		return nil, err
 	}
+	proxyAccessService, err := proxyaccess.NewService(pools, auditService)
+	if err != nil {
+		return nil, err
+	}
+	proxyAccessHTTP, err := proxyaccess.NewHTTPHandler(proxyAccessService, idempotency)
+	if err != nil {
+		return nil, err
+	}
 	identityHTTP, err := identity.NewHTTPHandler(identity.HTTPOptions{
 		Sessions: sessions, OIDC: oidcService, Local: localService, Services: serviceIdentities,
 		Idempotency: idempotency, SessionCookie: cfg.Session.CookieName, TrustedOrigins: trustedOrigins(cfg.OIDC.RedirectURL),
@@ -350,7 +359,7 @@ func buildApplicationHandler(cfg config.Config, logger *slog.Logger, pools *data
 	}
 	return httpserver.NewRouter(httpserver.Dependencies{
 		Logger: logger, Readiness: readiness,
-		Modules: []httpserver.ModuleRoutes{identityHTTP, tenancyHTTP, accountHTTP, poolHTTP, nodeHTTP, endpointHTTP, operationHTTP, reconcileHTTP, auditHTTP}, Authenticate: identityHTTP.Authenticate,
+		Modules: []httpserver.ModuleRoutes{identityHTTP, tenancyHTTP, accountHTTP, poolHTTP, nodeHTTP, endpointHTTP, proxyAccessHTTP, operationHTTP, reconcileHTTP, auditHTTP}, Authenticate: identityHTTP.Authenticate,
 	}), nil
 }
 
