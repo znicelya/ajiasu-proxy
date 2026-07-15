@@ -131,6 +131,10 @@ impl Runtime for DockerRuntime {
             "/run/ajiasu".to_owned(),
             "rw,noexec,nosuid,nodev,mode=0700,size=1048576".to_owned(),
         );
+        tmpfs.insert(
+            "/run/ajiasu-relay".to_owned(),
+            "rw,noexec,nosuid,nodev,mode=0700,size=1048576".to_owned(),
+        );
         let host_config = HostConfig {
             network_mode: Some("none".to_owned()),
             readonly_rootfs: Some(true),

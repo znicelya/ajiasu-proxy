@@ -7,9 +7,11 @@ rust-version.workspace = true
 
 [dependencies]
 ajiasu-agent-protocol = { path = "../agent-protocol" }
+ajiasu-proxy-policy = { path = "../proxy-policy" }
 async-trait.workspace = true
 bollard.workspace = true
 bytes.workspace = true
+ed25519-dalek.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
