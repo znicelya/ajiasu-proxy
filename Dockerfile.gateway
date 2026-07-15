@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1.7
+FROM rust:1.95-alpine AS build
+RUN apk add --no-cache musl-dev
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY crates crates
+RUN cargo build --locked --release -p ajiasu-gateway
+
+FROM alpine:3.22
+RUN addgroup -g 65532 -S gateway && adduser -S -D -H -u 65532 -G gateway gateway \
+    && apk add --no-cache ca-certificates \
+    && mkdir -p /run/ajiasu-gateway \
+    && chown -R 65532:65532 /run/ajiasu-gateway
+COPY --from=build --chmod=0555 /src/target/release/ajiasu-gateway /usr/local/bin/ajiasu-gateway
+USER 65532:65532
+EXPOSE 8080 1080
+ENTRYPOINT ["/usr/local/bin/ajiasu-gateway"]

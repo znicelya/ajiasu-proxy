@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/agent-protocol", "crates/agent", "crates/proxy-policy", "crates/proxy-protocol", "crates/runner-relay"]
+members = ["crates/agent-protocol", "crates/agent", "crates/proxy-policy", "crates/proxy-protocol", "crates/runner-relay", "crates/gateway"]
 resolver = "2"
 
 [workspace.package]
@@ -9,6 +9,7 @@ rust-version = "1.95"
 
 [workspace.dependencies]
 async-trait = "0.1"
+argon2 = "0.5"
 bollard = "0.17"
 bytes = "1"
 ed25519-dalek = "2"
