@@ -206,9 +206,13 @@ type TenantActor struct {
 	metadata ActorMetadata
 }
 
-func (a PlatformActor) ActorID() uuid.UUID { return a.subject.ActorID }
-func (a TenantActor) ActorID() uuid.UUID   { return a.subject.ActorID }
-func (a TenantActor) TenantID() uuid.UUID  { return a.tenantID }
+func (a PlatformActor) ActorID() uuid.UUID    { return a.subject.ActorID }
+func (a TenantActor) ActorID() uuid.UUID      { return a.subject.ActorID }
+func (a TenantActor) TenantID() uuid.UUID     { return a.tenantID }
+func (a TenantActor) Metadata() ActorMetadata { return a.metadata }
+func (a TenantActor) Allows(action Action) bool {
+	return Authorize(a.subject, action, tenantTarget(a.tenantID)).Allowed
+}
 
 func NewPlatformActor(subject Subject, metadata ActorMetadata) (PlatformActor, error) {
 	if err := metadata.validate(); err != nil {

@@ -14,16 +14,19 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dnomd343/ajiasu-proxy/internal/accounts"
 	"github.com/dnomd343/ajiasu-proxy/internal/audit"
 	"github.com/dnomd343/ajiasu-proxy/internal/identity"
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/config"
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/httpserver"
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/keyring"
+	accountpools "github.com/dnomd343/ajiasu-proxy/internal/pools"
+	"github.com/dnomd343/ajiasu-proxy/internal/secrets"
 	"github.com/dnomd343/ajiasu-proxy/internal/tenancy"
 )
 
-const supportedSchemaVersion int64 = 7
+const supportedSchemaVersion int64 = 8
 
 var errSchemaIncompatible = errors.New("schema version is incompatible")
 
@@ -185,6 +188,26 @@ func buildApplicationHandler(cfg config.Config, logger *slog.Logger, pools *data
 	if err != nil {
 		return nil, err
 	}
+	secretProvider, err := secrets.NewEnvelopeProvider(ring)
+	if err != nil {
+		return nil, err
+	}
+	accountService, err := accounts.NewService(pools, secretProvider, auditService)
+	if err != nil {
+		return nil, err
+	}
+	accountHTTP, err := accounts.NewHTTPHandler(accountService, idempotency)
+	if err != nil {
+		return nil, err
+	}
+	poolService, err := accountpools.NewService(pools, auditService)
+	if err != nil {
+		return nil, err
+	}
+	poolHTTP, err := accountpools.NewHTTPHandler(poolService, idempotency)
+	if err != nil {
+		return nil, err
+	}
 	identityHTTP, err := identity.NewHTTPHandler(identity.HTTPOptions{
 		Sessions: sessions, OIDC: oidcService, Local: localService, Services: serviceIdentities,
 		Idempotency: idempotency, SessionCookie: cfg.Session.CookieName, TrustedOrigins: trustedOrigins(cfg.OIDC.RedirectURL),
@@ -206,7 +229,7 @@ func buildApplicationHandler(cfg config.Config, logger *slog.Logger, pools *data
 	}
 	return httpserver.NewRouter(httpserver.Dependencies{
 		Logger: logger, Readiness: readiness,
-		Modules: []httpserver.ModuleRoutes{identityHTTP, tenancyHTTP, auditHTTP}, Authenticate: identityHTTP.Authenticate,
+		Modules: []httpserver.ModuleRoutes{identityHTTP, tenancyHTTP, accountHTTP, poolHTTP, auditHTTP}, Authenticate: identityHTTP.Authenticate,
 	}), nil
 }
 

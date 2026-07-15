@@ -15,7 +15,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
-func TestOpenAPIDocumentValidatesAndMatchesRegisteredPhase2Routes(t *testing.T) {
+func TestOpenAPIDocumentValidatesAndMatchesRegisteredRoutes(t *testing.T) {
 	root := repositoryRoot(t)
 	loader := openapi3.NewLoader()
 	document, err := loader.LoadFromFile(filepath.Join(root, "api", "openapi", "control-plane.yaml"))
@@ -62,6 +62,8 @@ func registeredRouteCatalog(t *testing.T, root string) map[string]struct{} {
 		{path: filepath.Join(root, "internal", "tenancy", "http.go"), prefix: "/api/v1"},
 		{path: filepath.Join(root, "internal", "identity", "http.go"), prefix: "/api/v1"},
 		{path: filepath.Join(root, "internal", "audit", "http.go"), prefix: "/api/v1"},
+		{path: filepath.Join(root, "internal", "accounts", "http.go"), prefix: "/api/v1"},
+		{path: filepath.Join(root, "internal", "pools", "http.go"), prefix: "/api/v1"},
 	}
 	methods := map[string]string{"Get": "GET", "Post": "POST", "Patch": "PATCH", "Delete": "DELETE"}
 	routes := map[string]struct{}{}
@@ -80,7 +82,7 @@ func registeredRouteCatalog(t *testing.T, root string) map[string]struct{} {
 				return true
 			}
 			receiver, ok := selector.X.(*ast.Ident)
-			if !ok || receiver.Name != "router" {
+			if !ok || (receiver.Name != "router" && receiver.Name != "r") {
 				return true
 			}
 			method, ok := methods[selector.Sel.Name]
