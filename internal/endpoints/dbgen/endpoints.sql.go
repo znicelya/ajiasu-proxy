@@ -13,7 +13,7 @@ import (
 )
 
 const getEndpoint = `-- name: GetEndpoint :one
-SELECT e.id, e.tenant_id, e.name, e.normalized_name, e.binding_mode, e.account_id, e.node_id, e.desired_runner_state, e.lifecycle_state, e.desired_generation, e.version, e.created_at, e.updated_at, s.observed_generation, s.observed_state, s.runner_id, s.reason_code,
+SELECT e.id, e.tenant_id, e.name, e.normalized_name, e.binding_mode, e.account_id, e.node_id, e.desired_runner_state, e.lifecycle_state, e.desired_generation, e.version, e.created_at, e.updated_at, e.pool_id, s.observed_generation, s.observed_state, s.runner_id, s.reason_code,
        s.last_agent_observation_at, s.last_transition_at
 FROM endpoints.proxy_endpoints e
 JOIN endpoints.endpoint_status s ON s.tenant_id=e.tenant_id AND s.endpoint_id=e.id
@@ -31,14 +31,15 @@ type GetEndpointRow struct {
 	Name                   string
 	NormalizedName         string
 	BindingMode            string
-	AccountID              uuid.UUID
-	NodeID                 uuid.UUID
+	AccountID              *uuid.UUID
+	NodeID                 *uuid.UUID
 	DesiredRunnerState     string
 	LifecycleState         string
 	DesiredGeneration      int64
 	Version                int64
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
+	PoolID                 *uuid.UUID
 	ObservedGeneration     int64
 	ObservedState          string
 	RunnerID               *uuid.UUID
@@ -64,6 +65,7 @@ func (q *Queries) GetEndpoint(ctx context.Context, arg GetEndpointParams) (GetEn
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PoolID,
 		&i.ObservedGeneration,
 		&i.ObservedState,
 		&i.RunnerID,
@@ -75,7 +77,7 @@ func (q *Queries) GetEndpoint(ctx context.Context, arg GetEndpointParams) (GetEn
 }
 
 const listEndpoints = `-- name: ListEndpoints :many
-SELECT e.id, e.tenant_id, e.name, e.normalized_name, e.binding_mode, e.account_id, e.node_id, e.desired_runner_state, e.lifecycle_state, e.desired_generation, e.version, e.created_at, e.updated_at, s.observed_generation, s.observed_state, s.runner_id, s.reason_code,
+SELECT e.id, e.tenant_id, e.name, e.normalized_name, e.binding_mode, e.account_id, e.node_id, e.desired_runner_state, e.lifecycle_state, e.desired_generation, e.version, e.created_at, e.updated_at, e.pool_id, s.observed_generation, s.observed_state, s.runner_id, s.reason_code,
        s.last_agent_observation_at, s.last_transition_at
 FROM endpoints.proxy_endpoints e
 JOIN endpoints.endpoint_status s ON s.tenant_id=e.tenant_id AND s.endpoint_id=e.id
@@ -96,14 +98,15 @@ type ListEndpointsRow struct {
 	Name                   string
 	NormalizedName         string
 	BindingMode            string
-	AccountID              uuid.UUID
-	NodeID                 uuid.UUID
+	AccountID              *uuid.UUID
+	NodeID                 *uuid.UUID
 	DesiredRunnerState     string
 	LifecycleState         string
 	DesiredGeneration      int64
 	Version                int64
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
+	PoolID                 *uuid.UUID
 	ObservedGeneration     int64
 	ObservedState          string
 	RunnerID               *uuid.UUID
@@ -140,6 +143,7 @@ func (q *Queries) ListEndpoints(ctx context.Context, arg ListEndpointsParams) ([
 			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PoolID,
 			&i.ObservedGeneration,
 			&i.ObservedState,
 			&i.RunnerID,

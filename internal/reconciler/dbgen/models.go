@@ -107,14 +107,15 @@ type EndpointsProxyEndpoint struct {
 	Name               string
 	NormalizedName     string
 	BindingMode        string
-	AccountID          uuid.UUID
-	NodeID             uuid.UUID
+	AccountID          *uuid.UUID
+	NodeID             *uuid.UUID
 	DesiredRunnerState string
 	LifecycleState     string
 	DesiredGeneration  int64
 	Version            int64
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+	PoolID             *uuid.UUID
 }
 
 type GatewaysEnrollment struct {
@@ -334,6 +335,74 @@ type ReconcilerWorkItem struct {
 	LastResultCode string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+type SchedulerEndpointAssignment struct {
+	TenantID              uuid.UUID
+	EndpointID            uuid.UUID
+	AssignmentID          uuid.UUID
+	PoolID                *uuid.UUID
+	AccountID             *uuid.UUID
+	NodeID                *uuid.UUID
+	RunnerID              *uuid.UUID
+	CapacityReservationID *uuid.UUID
+	DesiredGeneration     int64
+	FencingToken          int64
+	Strategy              string
+	State                 string
+	HealthState           string
+	RetryAttempts         int32
+	CooldownUntil         *time.Time
+	ValidUntil            *time.Time
+	LastReasonCode        string
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+type SchedulerHealthObservation struct {
+	TenantID             uuid.UUID
+	ResourceType         string
+	ResourceID           uuid.UUID
+	Dimension            string
+	State                string
+	Generation           int64
+	LastSequence         int64
+	ConsecutiveSuccesses int32
+	ConsecutiveFailures  int32
+	ReasonCode           string
+	CooldownUntil        *time.Time
+	LastObservedAt       *time.Time
+	LastTransitionAt     time.Time
+	UpdatedAt            time.Time
+}
+
+type SchedulerMigrationAttempt struct {
+	ID              uuid.UUID
+	TenantID        uuid.UUID
+	EndpointID      uuid.UUID
+	AssignmentID    uuid.UUID
+	OperationID     uuid.UUID
+	MigrationType   string
+	SourceAccountID *uuid.UUID
+	SourceNodeID    *uuid.UUID
+	TargetAccountID *uuid.UUID
+	TargetNodeID    *uuid.UUID
+	FencingToken    int64
+	Attempt         int32
+	State           string
+	ResultCode      string
+	CooldownUntil   *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type SchedulerPoolCursor struct {
+	TenantID     uuid.UUID
+	PoolID       uuid.UUID
+	Cursor       int64
+	FencingToken int64
+	Version      int64
+	UpdatedAt    time.Time
 }
 
 type TenancyMembership struct {
