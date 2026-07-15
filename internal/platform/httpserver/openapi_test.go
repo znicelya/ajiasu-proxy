@@ -52,6 +52,32 @@ func TestOpenAPIDocumentValidatesAndMatchesRegisteredRoutes(t *testing.T) {
 	}
 }
 
+func TestPhase6OpenAPIAssignmentContract(t *testing.T) {
+	root := repositoryRoot(t)
+	document, err := openapi3.NewLoader().LoadFromFile(filepath.Join(root, "api", "openapi", "control-plane.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := document.Paths.Map()
+	assignmentPath := "/api/v1/tenants/{tenant_id}/endpoints/{endpoint_id}/assignment"
+	if paths[assignmentPath] == nil || paths[assignmentPath].Get == nil {
+		t.Fatalf("missing GET %s", assignmentPath)
+	}
+	reconcilePath := assignmentPath + "/reconcile"
+	if paths[reconcilePath] == nil || paths[reconcilePath].Post == nil {
+		t.Fatalf("missing POST %s", reconcilePath)
+	}
+	assignment, ok := document.Components.Schemas["EndpointAssignment"]
+	if !ok || assignment.Value == nil {
+		t.Fatal("missing EndpointAssignment schema")
+	}
+	for _, field := range []string{"tenant_id", "endpoint_id", "assignment_id", "pool_id", "account_id", "node_id", "runner_id", "desired_generation", "fencing_token", "strategy", "state", "health_state", "cooldown_until", "valid_until"} {
+		if _, ok := assignment.Value.Properties[field]; !ok {
+			t.Errorf("EndpointAssignment is missing %s", field)
+		}
+	}
+}
+
 func registeredRouteCatalog(t *testing.T, root string) map[string]struct{} {
 	t.Helper()
 	files := []struct {

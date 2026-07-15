@@ -125,33 +125,33 @@ func redisReply(reader *bufio.Reader) (any, error) {
 	}
 	line, err := reader.ReadString('\n')
 	if err != nil || !strings.HasSuffix(line, "\r\n") {
-		return nil, errors.New("invalid Redis reply")
+		return nil, errors.New("invalid redis reply")
 	}
 	line = strings.TrimSuffix(line, "\r\n")
 	switch prefix {
 	case '+':
 		return line, nil
 	case '-':
-		return nil, errors.New("Redis command rejected")
+		return nil, errors.New("redis command rejected")
 	case ':':
 		return strconv.ParseInt(line, 10, 64)
 	case '$':
 		length, parseErr := strconv.Atoi(line)
 		if parseErr != nil || length < -1 || length > 16<<20 {
-			return nil, errors.New("invalid Redis bulk reply")
+			return nil, errors.New("invalid redis bulk reply")
 		}
 		if length == -1 {
 			return nil, nil
 		}
 		value := make([]byte, length+2)
 		if _, err := io.ReadFull(reader, value); err != nil || string(value[length:]) != "\r\n" {
-			return nil, errors.New("invalid Redis bulk reply")
+			return nil, errors.New("invalid redis bulk reply")
 		}
 		return string(value[:length]), nil
 	case '*':
 		length, parseErr := strconv.Atoi(line)
 		if parseErr != nil || length < 0 || length > 1024 {
-			return nil, errors.New("invalid Redis array reply")
+			return nil, errors.New("invalid redis array reply")
 		}
 		values := make([]any, length)
 		for index := range values {
@@ -162,6 +162,6 @@ func redisReply(reader *bufio.Reader) (any, error) {
 		}
 		return values, nil
 	default:
-		return nil, errors.New("invalid Redis reply type")
+		return nil, errors.New("invalid redis reply type")
 	}
 }
