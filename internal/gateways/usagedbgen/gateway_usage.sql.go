@@ -46,3 +46,44 @@ func (q *Queries) GetUsageWindow(ctx context.Context, arg GetUsageWindowParams) 
 	)
 	return i, err
 }
+
+const upsertUsageWindow = `-- name: UpsertUsageWindow :exec
+INSERT INTO gateways.usage_windows (tenant_id, endpoint_id, credential_id, window_start, window_seconds, active_connections, connection_count, bytes_in, bytes_out, version, updated_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1,$10)
+ON CONFLICT (tenant_id, endpoint_id, credential_id, window_start) DO UPDATE SET
+  active_connections = gateways.usage_windows.active_connections + EXCLUDED.active_connections,
+  connection_count = gateways.usage_windows.connection_count + EXCLUDED.connection_count,
+  bytes_in = gateways.usage_windows.bytes_in + EXCLUDED.bytes_in,
+  bytes_out = gateways.usage_windows.bytes_out + EXCLUDED.bytes_out,
+  version = gateways.usage_windows.version + 1,
+  updated_at = EXCLUDED.updated_at
+`
+
+type UpsertUsageWindowParams struct {
+	TenantID          uuid.UUID
+	EndpointID        uuid.UUID
+	CredentialID      uuid.UUID
+	WindowStart       time.Time
+	WindowSeconds     int32
+	ActiveConnections int32
+	ConnectionCount   int64
+	BytesIn           int64
+	BytesOut          int64
+	UpdatedAt         time.Time
+}
+
+func (q *Queries) UpsertUsageWindow(ctx context.Context, arg UpsertUsageWindowParams) error {
+	_, err := q.db.Exec(ctx, upsertUsageWindow,
+		arg.TenantID,
+		arg.EndpointID,
+		arg.CredentialID,
+		arg.WindowStart,
+		arg.WindowSeconds,
+		arg.ActiveConnections,
+		arg.ConnectionCount,
+		arg.BytesIn,
+		arg.BytesOut,
+		arg.UpdatedAt,
+	)
+	return err
+}
