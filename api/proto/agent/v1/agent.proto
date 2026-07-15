@@ -1,0 +1,183 @@
+syntax = "proto3";
+
+package ajiasu.agent.v1;
+
+option go_package = "github.com/dnomd343/ajiasu-proxy/internal/gen/agent/v1;agentv1";
+
+service AgentControl {
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+  rpc ControlStream(stream AgentMessage) returns (stream ControlMessage);
+}
+
+message RegisterNodeRequest {
+  string enrollment_token = 1;
+  string agent_instance_id = 2;
+  string requested_node_name = 3;
+  uint32 minimum_protocol_revision = 4;
+  uint32 maximum_protocol_revision = 5;
+  string agent_version = 6;
+  string architecture = 7;
+  repeated string runtime_capabilities = 8;
+}
+
+message RegisterNodeResponse {
+  string node_id = 1;
+  string session_token = 2;
+  string session_expires_at = 3;
+  uint32 selected_protocol_revision = 4;
+  uint32 heartbeat_interval_seconds = 5;
+}
+
+message AgentMessage {
+  oneof body {
+    AgentHello hello = 1;
+    Heartbeat heartbeat = 2;
+    InventorySnapshot inventory_snapshot = 3;
+    RunnerObservation runner_observation = 4;
+    OperationResult operation_result = 5;
+    CommandAck command_ack = 6;
+  }
+}
+
+message ControlMessage {
+  oneof body {
+    SessionRenewal session_renewal = 1;
+    RunnerCommand runner_command = 2;
+    DesiredInventoryRequest desired_inventory_request = 3;
+    MaintenanceCommand maintenance_command = 4;
+  }
+}
+
+message AgentHello {
+  string node_id = 1;
+  string agent_instance_id = 2;
+  uint32 protocol_revision = 3;
+  string agent_version = 4;
+  string architecture = 5;
+  repeated string runtime_capabilities = 6;
+}
+
+message Heartbeat {
+  string node_id = 1;
+  string observed_at = 2;
+  map<string, string> observed_labels = 3;
+  uint32 maximum_runners = 4;
+  uint32 active_runners = 5;
+  uint32 reserved_headroom = 6;
+  MaintenanceState maintenance_state = 7;
+}
+
+message InventorySnapshot {
+  string node_id = 1;
+  string observed_at = 2;
+  repeated RunnerObservation runners = 3;
+}
+
+message RunnerObservation {
+  string node_id = 1;
+  string tenant_id = 2;
+  string endpoint_id = 3;
+  string runner_id = 4;
+  string operation_id = 5;
+  uint64 observed_generation = 6;
+  RunnerState state = 7;
+  string reason_code = 8;
+  uint32 restart_count = 9;
+  string observed_at = 10;
+}
+
+message OperationResult {
+  string operation_id = 1;
+  string runner_id = 2;
+  uint64 observed_generation = 3;
+  OperationResultCode code = 4;
+  string safe_message = 5;
+  string completed_at = 6;
+}
+
+message CommandAck {
+  string operation_id = 1;
+  string runner_id = 2;
+  CommandAckCode code = 3;
+  uint64 observed_generation = 4;
+}
+
+message SessionRenewal {
+  string session_token = 1;
+  string session_expires_at = 2;
+  uint64 session_generation = 3;
+}
+
+message RunnerCommand {
+  string operation_id = 1;
+  string runner_id = 2;
+  string tenant_id = 3;
+  string endpoint_id = 4;
+  string account_id = 5;
+  uint64 credential_version = 6;
+  uint64 desired_generation = 7;
+  RunnerAction action = 8;
+  string deadline = 9;
+  RuntimeSpec runtime = 10;
+  bytes credential_configuration = 11;
+}
+
+message RuntimeSpec {
+  string runner_image = 1;
+  uint64 memory_limit_bytes = 2;
+  uint32 cpu_quota_millis = 3;
+  map<string, string> immutable_labels = 4;
+}
+
+message DesiredInventoryRequest {
+  string request_id = 1;
+}
+
+message MaintenanceCommand {
+  string operation_id = 1;
+  MaintenanceState desired_state = 2;
+  string deadline = 3;
+}
+
+enum RunnerAction {
+  RUNNER_ACTION_UNSPECIFIED = 0;
+  RUNNER_ACTION_CREATE = 1;
+  RUNNER_ACTION_STOP = 2;
+  RUNNER_ACTION_REBUILD = 3;
+  RUNNER_ACTION_GARBAGE_COLLECT = 4;
+}
+
+enum RunnerState {
+  RUNNER_STATE_UNSPECIFIED = 0;
+  RUNNER_STATE_PENDING = 1;
+  RUNNER_STATE_STARTING = 2;
+  RUNNER_STATE_RUNNING = 3;
+  RUNNER_STATE_STOPPING = 4;
+  RUNNER_STATE_STOPPED = 5;
+  RUNNER_STATE_FAILED = 6;
+  RUNNER_STATE_ORPHANED = 7;
+}
+
+enum MaintenanceState {
+  MAINTENANCE_STATE_UNSPECIFIED = 0;
+  MAINTENANCE_STATE_ACTIVE = 1;
+  MAINTENANCE_STATE_CORDONED = 2;
+  MAINTENANCE_STATE_DRAINING = 3;
+  MAINTENANCE_STATE_DISABLED = 4;
+}
+
+enum OperationResultCode {
+  OPERATION_RESULT_CODE_UNSPECIFIED = 0;
+  OPERATION_RESULT_CODE_SUCCEEDED = 1;
+  OPERATION_RESULT_CODE_FAILED = 2;
+  OPERATION_RESULT_CODE_REJECTED = 3;
+  OPERATION_RESULT_CODE_STALE = 4;
+}
+
+enum CommandAckCode {
+  COMMAND_ACK_CODE_UNSPECIFIED = 0;
+  COMMAND_ACK_CODE_ACCEPTED = 1;
+  COMMAND_ACK_CODE_DUPLICATE = 2;
+  COMMAND_ACK_CODE_STALE = 3;
+  COMMAND_ACK_CODE_REJECTED = 4;
+}

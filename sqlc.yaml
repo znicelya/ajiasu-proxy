@@ -87,6 +87,102 @@ sql:
       - "migrations/00001_platform_foundation.sql"
       - "migrations/00003_tenancy.sql"
       - "migrations/00008_accounts_pools_quotas.sql"
+      - "migrations/00009_nodes_endpoints_operations.sql"
+    queries: "sql/queries/nodes.sql"
+    gen:
+      go:
+        package: "dbgen"
+        out: "internal/nodes/dbgen"
+        sql_package: "pgx/v5"
+        emit_prepared_queries: false
+        overrides:
+          - db_type: "uuid"
+            go_type: {import: "github.com/google/uuid", type: "UUID"}
+          - db_type: "uuid"
+            nullable: true
+            go_type: {import: "github.com/google/uuid", type: "UUID", pointer: true}
+          - db_type: "timestamptz"
+            go_type: {import: "time", type: "Time"}
+          - db_type: "timestamptz"
+            nullable: true
+            go_type: {import: "time", type: "Time", pointer: true}
+  - engine: "postgresql"
+    schema:
+      - "migrations/00001_platform_foundation.sql"
+      - "migrations/00003_tenancy.sql"
+      - "migrations/00008_accounts_pools_quotas.sql"
+      - "migrations/00009_nodes_endpoints_operations.sql"
+    queries: "sql/queries/endpoints.sql"
+    gen:
+      go:
+        package: "dbgen"
+        out: "internal/endpoints/dbgen"
+        sql_package: "pgx/v5"
+        emit_prepared_queries: false
+        overrides:
+          - db_type: "uuid"
+            go_type: {import: "github.com/google/uuid", type: "UUID"}
+          - db_type: "uuid"
+            nullable: true
+            go_type: {import: "github.com/google/uuid", type: "UUID", pointer: true}
+          - db_type: "timestamptz"
+            go_type: {import: "time", type: "Time"}
+          - db_type: "timestamptz"
+            nullable: true
+            go_type: {import: "time", type: "Time", pointer: true}
+  - engine: "postgresql"
+    schema:
+      - "migrations/00001_platform_foundation.sql"
+      - "migrations/00003_tenancy.sql"
+      - "migrations/00008_accounts_pools_quotas.sql"
+      - "migrations/00009_nodes_endpoints_operations.sql"
+    queries: "sql/queries/operations.sql"
+    gen:
+      go:
+        package: "dbgen"
+        out: "internal/operations/dbgen"
+        sql_package: "pgx/v5"
+        emit_prepared_queries: false
+        overrides:
+          - db_type: "uuid"
+            go_type: {import: "github.com/google/uuid", type: "UUID"}
+          - db_type: "uuid"
+            nullable: true
+            go_type: {import: "github.com/google/uuid", type: "UUID", pointer: true}
+          - db_type: "timestamptz"
+            go_type: {import: "time", type: "Time"}
+          - db_type: "timestamptz"
+            nullable: true
+            go_type: {import: "time", type: "Time", pointer: true}
+  - engine: "postgresql"
+    schema:
+      - "migrations/00001_platform_foundation.sql"
+      - "migrations/00003_tenancy.sql"
+      - "migrations/00008_accounts_pools_quotas.sql"
+      - "migrations/00009_nodes_endpoints_operations.sql"
+    queries: "sql/queries/reconciler.sql"
+    gen:
+      go:
+        package: "dbgen"
+        out: "internal/reconciler/dbgen"
+        sql_package: "pgx/v5"
+        emit_prepared_queries: false
+        overrides:
+          - db_type: "uuid"
+            go_type: {import: "github.com/google/uuid", type: "UUID"}
+          - db_type: "uuid"
+            nullable: true
+            go_type: {import: "github.com/google/uuid", type: "UUID", pointer: true}
+          - db_type: "timestamptz"
+            go_type: {import: "time", type: "Time"}
+          - db_type: "timestamptz"
+            nullable: true
+            go_type: {import: "time", type: "Time", pointer: true}
+  - engine: "postgresql"
+    schema:
+      - "migrations/00001_platform_foundation.sql"
+      - "migrations/00003_tenancy.sql"
+      - "migrations/00008_accounts_pools_quotas.sql"
     queries: "sql/queries/pools.sql"
     gen:
       go:

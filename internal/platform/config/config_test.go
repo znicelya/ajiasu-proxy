@@ -321,6 +321,8 @@ func validEnvironment(t *testing.T) map[string]string {
 		"AJIASU_HTTP_WRITE_TIMEOUT":         "4s",
 		"AJIASU_HTTP_IDLE_TIMEOUT":          "5s",
 		"AJIASU_HTTP_SHUTDOWN_TIMEOUT":      "7s",
+		"AJIASU_AGENT_GRPC_BIND":            "127.0.0.1:9090",
+		"AJIASU_AGENT_GRPC_INSECURE":        "true",
 		"AJIASU_DATABASE_NORMAL_DSN":        "postgres://normal:normal-password@localhost/normal",
 		"AJIASU_DATABASE_NORMAL_MAX_OPEN":   "8",
 		"AJIASU_DATABASE_NORMAL_MIN_IDLE":   "4",

@@ -524,6 +524,178 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TenantQuotaPatch'}}}}
       responses:
         '200': {description: Tenant quota updated., content: {application/json: {schema: {$ref: '#/components/schemas/TenantQuota'}}}}
+  /api/v1/node-enrollments:
+    post:
+      operationId: createNodeEnrollment
+      tags: [nodes]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NodeEnrollmentCreate'}}}}
+      responses:
+        '201': {description: One-time node enrollment token., content: {application/json: {schema: {$ref: '#/components/schemas/NodeEnrollmentCreated'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/v1/node-enrollments/{enrollment_id}:
+    parameters: [{$ref: '#/components/parameters/EnrollmentID'}]
+    delete:
+      operationId: revokeNodeEnrollment
+      tags: [nodes]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      responses: {'204': {description: Enrollment revoked.}, '404': {$ref: '#/components/responses/Error'}}
+  /api/v1/nodes:
+    get:
+      operationId: listNodes
+      tags: [nodes]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/PageSize'}]
+      responses:
+        '200': {description: Platform node page., content: {application/json: {schema: {$ref: '#/components/schemas/NodeList'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/v1/nodes/{node_id}:
+    parameters: [{$ref: '#/components/parameters/NodeID'}]
+    get:
+      operationId: getNode
+      tags: [nodes]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Platform node., content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+        '404': {$ref: '#/components/responses/Error'}
+    patch:
+      operationId: updateNodeMaintenance
+      tags: [nodes]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NodePatch'}}}}
+      responses:
+        '200': {description: Node maintenance state updated., content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/nodes/{node_id}/drain:
+    parameters: [{$ref: '#/components/parameters/NodeID'}]
+    post:
+      operationId: drainNode
+      tags: [nodes]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EndpointAction'}}}}
+      responses: {'200': {description: Node drain requested., content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}, '409': {$ref: '#/components/responses/Error'}}
+  /api/v1/nodes/{node_id}/runners/{runner_id}/force-finalize:
+    parameters: [{$ref: '#/components/parameters/NodeID'}, {$ref: '#/components/parameters/RunnerID'}]
+    post:
+      operationId: forceFinalizeRunner
+      tags: [operations]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: false, required: [reason_category, duplicate_login_risk_acknowledged], properties: {reason_category: {type: string, minLength: 1, maxLength: 128}, duplicate_login_risk_acknowledged: {type: boolean, const: true}}}}}}
+      responses: {'200': {description: Runner force-finalized., content: {application/json: {schema: {$ref: '#/components/schemas/ForceFinalized'}}}}, '404': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}
+  /api/v1/tenants/{tenant_id}/runner-nodes:
+    parameters: [{$ref: '#/components/parameters/TenantID'}]
+    get:
+      operationId: listEligibleRunnerNodes
+      tags: [nodes]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses: {'200': {description: Eligible runner nodes., content: {application/json: {schema: {$ref: '#/components/schemas/EligibleNodeList'}}}}}
+  /api/v1/tenants/{tenant_id}/endpoints:
+    parameters: [{$ref: '#/components/parameters/TenantID'}]
+    get:
+      operationId: listEndpoints
+      tags: [endpoints]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/PageSize'}]
+      responses:
+        '200': {description: Endpoint page., content: {application/json: {schema: {$ref: '#/components/schemas/EndpointList'}}}}
+    post:
+      operationId: createFixedEndpoint
+      tags: [endpoints]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EndpointCreate'}}}}
+      responses:
+        '202': {description: Endpoint desired state and queued operation., content: {application/json: {schema: {$ref: '#/components/schemas/EndpointOperation'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}/endpoints/{endpoint_id}:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/EndpointID'}]
+    get:
+      operationId: getEndpoint
+      tags: [endpoints]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Endpoint desired and observed state., content: {application/json: {schema: {$ref: '#/components/schemas/Endpoint'}}}}
+        '404': {$ref: '#/components/responses/Error'}
+    patch:
+      operationId: updateEndpointDesiredState
+      tags: [endpoints]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: false, required: [expected_version, desired_runner_state], properties: {expected_version: {type: integer, format: int64, minimum: 1}, desired_runner_state: {type: string, enum: [running, stopped]}}}}}}
+      responses:
+        '202': {description: Endpoint desired state queued., content: {application/json: {schema: {$ref: '#/components/schemas/EndpointOperation'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: deleteEndpoint
+      tags: [endpoints]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: false, required: [expected_version], properties: {expected_version: {type: integer, format: int64, minimum: 1}}}}}}
+      responses:
+        '202': {description: Endpoint deletion queued., content: {application/json: {schema: {$ref: '#/components/schemas/EndpointOperation'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants/{tenant_id}/endpoints/{endpoint_id}/start:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/EndpointID'}]
+    post:
+      operationId: startEndpoint
+      tags: [endpoints]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EndpointAction'}}}}
+      responses: {'202': {description: Endpoint start queued., content: {application/json: {schema: {$ref: '#/components/schemas/EndpointOperation'}}}}, '409': {$ref: '#/components/responses/Error'}}
+  /api/v1/tenants/{tenant_id}/endpoints/{endpoint_id}/stop:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/EndpointID'}]
+    post:
+      operationId: stopEndpoint
+      tags: [endpoints]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EndpointAction'}}}}
+      responses: {'202': {description: Endpoint stop queued., content: {application/json: {schema: {$ref: '#/components/schemas/EndpointOperation'}}}}, '409': {$ref: '#/components/responses/Error'}}
+  /api/v1/tenants/{tenant_id}/endpoints/{endpoint_id}/rebuild:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/EndpointID'}]
+    post:
+      operationId: rebuildEndpoint
+      tags: [endpoints]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/CSRFToken'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EndpointAction'}}}}
+      responses: {'202': {description: Endpoint rebuild queued., content: {application/json: {schema: {$ref: '#/components/schemas/EndpointOperation'}}}}, '409': {$ref: '#/components/responses/Error'}}
+  /api/v1/operations:
+    get:
+      operationId: listPlatformOperations
+      tags: [operations]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/PageSize'}]
+      responses: {'200': {description: Platform operation page., content: {application/json: {schema: {$ref: '#/components/schemas/OperationList'}}}}}
+  /api/v1/operations/{operation_id}:
+    parameters: [{$ref: '#/components/parameters/OperationID'}]
+    get:
+      operationId: getPlatformOperation
+      tags: [operations]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses: {'200': {description: Platform operation., content: {application/json: {schema: {$ref: '#/components/schemas/RunnerOperation'}}}}, '404': {$ref: '#/components/responses/Error'}}
+  /api/v1/tenants/{tenant_id}/operations:
+    parameters: [{$ref: '#/components/parameters/TenantID'}]
+    get:
+      operationId: listTenantOperations
+      tags: [operations]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/PageSize'}]
+      responses: {'200': {description: Tenant operation page., content: {application/json: {schema: {$ref: '#/components/schemas/OperationList'}}}}}
+  /api/v1/tenants/{tenant_id}/operations/{operation_id}:
+    parameters: [{$ref: '#/components/parameters/TenantID'}, {$ref: '#/components/parameters/OperationID'}]
+    get:
+      operationId: getTenantOperation
+      tags: [operations]
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses: {'200': {description: Tenant operation., content: {application/json: {schema: {$ref: '#/components/schemas/RunnerOperation'}}}}, '404': {$ref: '#/components/responses/Error'}}
 components:
   securitySchemes:
     cookieAuth:
@@ -584,6 +756,31 @@ components:
       in: path
       required: true
       schema: {$ref: '#/components/schemas/UUID'}
+    NodeID:
+      name: node_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+    EndpointID:
+      name: endpoint_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+    EnrollmentID:
+      name: enrollment_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+    OperationID:
+      name: operation_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+    RunnerID:
+      name: runner_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
     ServiceIdentityID:
       name: id
       in: path
@@ -610,6 +807,22 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/ErrorEnvelope'}
   schemas:
+    NodeEnrollmentCreate: {type: object, additionalProperties: false, required: [expected_node_name, valid_for_seconds], properties: {expected_node_name: {type: string, minLength: 1, maxLength: 200}, valid_for_seconds: {type: integer, minimum: 1, maximum: 3600}}}
+    NodeEnrollmentCreated: {type: object, additionalProperties: false, required: [enrollment, token], properties: {enrollment: {type: object, required: [id, expected_node_name, token_prefix, expires_at, created_at], properties: {id: {$ref: '#/components/schemas/UUID'}, expected_node_name: {type: string}, token_prefix: {type: string}, expires_at: {$ref: '#/components/schemas/RFC3339Time'}, created_at: {$ref: '#/components/schemas/RFC3339Time'}}}, token: {type: string, writeOnly: true}}}
+    Node: {type: object, required: [id, name, desired_labels, observed_labels, max_runners, reserved_headroom, active_runners, maintenance_state, connectivity_state, session_generation, version, created_at, updated_at], properties: {id: {$ref: '#/components/schemas/UUID'}, name: {type: string}, desired_labels: {type: object, additionalProperties: {type: string}}, observed_labels: {type: object, additionalProperties: {type: string}}, max_runners: {type: integer}, reserved_headroom: {type: integer}, active_runners: {type: integer}, maintenance_state: {type: string, enum: [active, cordoned, draining, disabled]}, connectivity_state: {type: string, enum: [registering, online, stale, offline]}, architecture: {type: string}, agent_version: {type: string}, last_heartbeat_at: {$ref: '#/components/schemas/RFC3339Time'}, session_generation: {type: integer, format: int64}, version: {type: integer, format: int64}, created_at: {$ref: '#/components/schemas/RFC3339Time'}, updated_at: {$ref: '#/components/schemas/RFC3339Time'}}}
+    NodePatch: {type: object, additionalProperties: false, required: [expected_version, maintenance_state], properties: {expected_version: {type: integer, format: int64, minimum: 1}, maintenance_state: {type: string, enum: [active, cordoned, draining, disabled]}}}
+    NodeList: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/Node'}}, next_cursor: {$ref: '#/components/schemas/Cursor'}}}
+    EligibleNode: {type: object, required: [id, name, labels, maintenance_state, connectivity_state, available_runners], properties: {id: {$ref: '#/components/schemas/UUID'}, name: {type: string}, labels: {type: object, additionalProperties: {type: string}}, maintenance_state: {type: string, enum: [active, cordoned, draining, disabled]}, connectivity_state: {type: string, enum: [registering, online, stale, offline]}, available_runners: {type: integer, minimum: 0}}}
+    EligibleNodeList: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/EligibleNode'}}}}
+    EndpointStatus: {type: object, required: [observed_generation, observed_state, reason_code, last_transition_at], properties: {observed_generation: {type: integer, format: int64}, observed_state: {type: string, enum: [pending, starting, running, stopping, stopped, failed, orphaned]}, runner_id: {$ref: '#/components/schemas/UUID'}, reason_code: {type: string}, last_agent_observation_at: {$ref: '#/components/schemas/RFC3339Time'}, last_transition_at: {$ref: '#/components/schemas/RFC3339Time'}}}
+    Endpoint: {type: object, required: [id, tenant_id, name, binding_mode, account_id, node_id, desired_runner_state, lifecycle_state, desired_generation, version, status, created_at, updated_at], properties: {id: {$ref: '#/components/schemas/UUID'}, tenant_id: {$ref: '#/components/schemas/UUID'}, name: {type: string}, binding_mode: {type: string, const: fixed}, account_id: {$ref: '#/components/schemas/UUID'}, node_id: {$ref: '#/components/schemas/UUID'}, desired_runner_state: {type: string, enum: [running, stopped]}, lifecycle_state: {type: string, enum: [active, disabled, deleting]}, desired_generation: {type: integer, format: int64}, version: {type: integer, format: int64}, status: {$ref: '#/components/schemas/EndpointStatus'}, created_at: {$ref: '#/components/schemas/RFC3339Time'}, updated_at: {$ref: '#/components/schemas/RFC3339Time'}}}
+    EndpointCreate: {type: object, additionalProperties: false, required: [name, account_id, node_id], properties: {name: {type: string, minLength: 1, maxLength: 200}, account_id: {$ref: '#/components/schemas/UUID'}, node_id: {$ref: '#/components/schemas/UUID'}, desired_runner_state: {type: string, enum: [running, stopped], default: running}}}
+    RunnerOperation: {type: object, required: [id, tenant_id, operation_type, resource_type, resource_id, requested_generation, state, progress_category, created_at, updated_at], properties: {id: {$ref: '#/components/schemas/UUID'}, tenant_id: {$ref: '#/components/schemas/UUID'}, operation_type: {type: string}, resource_type: {type: string}, resource_id: {$ref: '#/components/schemas/UUID'}, requested_generation: {type: integer, format: int64}, state: {type: string, enum: [queued, running, succeeded, failed, cancelled]}, progress_category: {type: string}, created_at: {$ref: '#/components/schemas/RFC3339Time'}, updated_at: {$ref: '#/components/schemas/RFC3339Time'}}}
+    EndpointOperation: {type: object, required: [endpoint, operation], properties: {endpoint: {$ref: '#/components/schemas/Endpoint'}, operation: {$ref: '#/components/schemas/RunnerOperation'}}}
+    EndpointAction: {type: object, additionalProperties: false, required: [expected_version], properties: {expected_version: {type: integer, format: int64, minimum: 1}}}
+    OperationList: {type: object, required: [items, next_cursor], properties: {items: {type: array, items: {$ref: '#/components/schemas/RunnerOperation'}}, next_cursor: {type: string}}}
+    ForceFinalized: {type: object, required: [node_id, runner_id, endpoint_id, reservation_released], properties: {node_id: {$ref: '#/components/schemas/UUID'}, runner_id: {$ref: '#/components/schemas/UUID'}, endpoint_id: {$ref: '#/components/schemas/UUID'}, reservation_released: {type: boolean}}}
+    EndpointList: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/Endpoint'}}, next_cursor: {$ref: '#/components/schemas/Cursor'}}}
     CredentialInput:
       type: object
       additionalProperties: false

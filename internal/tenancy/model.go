@@ -206,7 +206,11 @@ type TenantActor struct {
 	metadata ActorMetadata
 }
 
-func (a PlatformActor) ActorID() uuid.UUID    { return a.subject.ActorID }
+func (a PlatformActor) ActorID() uuid.UUID      { return a.subject.ActorID }
+func (a PlatformActor) Metadata() ActorMetadata { return a.metadata }
+func (a PlatformActor) Allows(action Action) bool {
+	return Authorize(a.subject, action, Target{Scope: ScopePlatform}).Allowed
+}
 func (a TenantActor) ActorID() uuid.UUID      { return a.subject.ActorID }
 func (a TenantActor) TenantID() uuid.UUID     { return a.tenantID }
 func (a TenantActor) Metadata() ActorMetadata { return a.metadata }

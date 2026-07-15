@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/netip"
 	"net/url"
 	"os"
@@ -24,6 +25,7 @@ const (
 type Config struct {
 	Environment Environment
 	HTTP        HTTP
+	AgentGRPC   AgentGRPC
 	Database    Database
 	OIDC        OIDC
 	Session     Session
@@ -38,6 +40,15 @@ type HTTP struct {
 	WriteTimeout      time.Duration
 	IdleTimeout       time.Duration
 	ShutdownTimeout   time.Duration
+}
+
+type AgentGRPC struct {
+	Bind         string
+	Insecure     bool
+	CertFile     string
+	KeyFile      string
+	MaxRecvBytes int
+	MaxSendBytes int
 }
 
 type Database struct {
@@ -123,10 +134,15 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	agentGRPC, err := l.loadAgentGRPC(environment)
+	if err != nil {
+		return Config{}, err
+	}
 
 	return Config{
 		Environment: environment,
 		HTTP:        httpConfig,
+		AgentGRPC:   agentGRPC,
 		Database:    database,
 		OIDC:        oidc,
 		Session:     session,
@@ -146,6 +162,7 @@ func (c Config) LogValue() slog.Value {
 			slog.Duration("idle_timeout", c.HTTP.IdleTimeout),
 			slog.Duration("shutdown_timeout", c.HTTP.ShutdownTimeout),
 		),
+		slog.Group("agent_grpc", slog.String("bind", c.AgentGRPC.Bind), slog.Bool("insecure", c.AgentGRPC.Insecure), slog.Int("max_recv_bytes", c.AgentGRPC.MaxRecvBytes), slog.Int("max_send_bytes", c.AgentGRPC.MaxSendBytes)),
 		slog.Group("database",
 			slog.String("normal_dsn", "[redacted]"),
 			slog.Int("normal_max_open", c.Database.Normal.MaxOpenConnections),
@@ -171,11 +188,56 @@ func (c Config) LogValue() slog.Value {
 
 func (c Config) String() string {
 	return fmt.Sprintf(
-		"Config{environment=%q,http_bind=%q,database=[redacted],oidc=[redacted],session=[redacted],keyring_file=[redacted],local_auth_enabled=%t}",
+		"Config{environment=%q,http_bind=%q,agent_grpc_bind=%q,database=[redacted],oidc=[redacted],session=[redacted],keyring_file=[redacted],local_auth_enabled=%t}",
 		c.Environment,
 		c.HTTP.Bind,
+		c.AgentGRPC.Bind,
 		c.LocalAuth.Enabled,
 	)
+}
+
+func (l loader) loadAgentGRPC(environment Environment) (AgentGRPC, error) {
+	bind, err := l.required("AJIASU_AGENT_GRPC_BIND")
+	if err != nil {
+		return AgentGRPC{}, err
+	}
+	if _, _, err := net.SplitHostPort(bind); err != nil {
+		return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_BIND", "must be host:port")
+	}
+	insecure, err := l.boolean("AJIASU_AGENT_GRPC_INSECURE")
+	if err != nil {
+		return AgentGRPC{}, err
+	}
+	if insecure {
+		if environment != EnvironmentDevelopment {
+			return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_INSECURE", "is allowed only in development")
+		}
+		host, _, _ := net.SplitHostPort(bind)
+		if host != "localhost" {
+			address, parseErr := netip.ParseAddr(host)
+			if parseErr != nil || !address.IsLoopback() {
+				return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_BIND", "must be loopback when insecure")
+			}
+		}
+		return AgentGRPC{Bind: bind, Insecure: true, MaxRecvBytes: 4 << 20, MaxSendBytes: 4 << 20}, nil
+	}
+	certFile, err := l.required("AJIASU_AGENT_GRPC_CERT_FILE")
+	if err != nil {
+		return AgentGRPC{}, err
+	}
+	keyFile, err := l.required("AJIASU_AGENT_GRPC_KEY_FILE")
+	if err != nil {
+		return AgentGRPC{}, err
+	}
+	if _, _, err := readRegularFile(certFile, 4<<20); err != nil {
+		return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_CERT_FILE", "must identify an accessible regular file")
+	}
+	if _, info, err := readRegularFile(keyFile, 4<<20); err != nil {
+		return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_KEY_FILE", "must identify an accessible regular file")
+	} else if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+		return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_KEY_FILE", "must not be accessible by group or other users")
+	}
+	return AgentGRPC{Bind: bind, CertFile: certFile, KeyFile: keyFile, MaxRecvBytes: 4 << 20, MaxSendBytes: 4 << 20}, nil
 }
 
 func (l loader) loadHTTP() (HTTP, error) {

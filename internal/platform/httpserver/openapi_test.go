@@ -64,6 +64,10 @@ func registeredRouteCatalog(t *testing.T, root string) map[string]struct{} {
 		{path: filepath.Join(root, "internal", "audit", "http.go"), prefix: "/api/v1"},
 		{path: filepath.Join(root, "internal", "accounts", "http.go"), prefix: "/api/v1"},
 		{path: filepath.Join(root, "internal", "pools", "http.go"), prefix: "/api/v1"},
+		{path: filepath.Join(root, "internal", "nodes", "http.go"), prefix: "/api/v1"},
+		{path: filepath.Join(root, "internal", "endpoints", "http.go"), prefix: "/api/v1"},
+		{path: filepath.Join(root, "internal", "operations", "http.go"), prefix: "/api/v1"},
+		{path: filepath.Join(root, "internal", "reconciler", "http.go"), prefix: "/api/v1"},
 	}
 	methods := map[string]string{"Get": "GET", "Post": "POST", "Patch": "PATCH", "Delete": "DELETE"}
 	routes := map[string]struct{}{}

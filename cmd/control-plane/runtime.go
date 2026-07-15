@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -16,17 +18,23 @@ import (
 
 	"github.com/dnomd343/ajiasu-proxy/internal/accounts"
 	"github.com/dnomd343/ajiasu-proxy/internal/audit"
+	"github.com/dnomd343/ajiasu-proxy/internal/endpoints"
 	"github.com/dnomd343/ajiasu-proxy/internal/identity"
+	"github.com/dnomd343/ajiasu-proxy/internal/nodes"
+	"github.com/dnomd343/ajiasu-proxy/internal/operations"
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/config"
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/httpserver"
 	"github.com/dnomd343/ajiasu-proxy/internal/platform/keyring"
 	accountpools "github.com/dnomd343/ajiasu-proxy/internal/pools"
+	"github.com/dnomd343/ajiasu-proxy/internal/reconciler"
 	"github.com/dnomd343/ajiasu-proxy/internal/secrets"
 	"github.com/dnomd343/ajiasu-proxy/internal/tenancy"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
-const supportedSchemaVersion int64 = 8
+const supportedSchemaVersion int64 = 9
 
 var errSchemaIncompatible = errors.New("schema version is incompatible")
 
@@ -49,12 +57,15 @@ func (s *switchingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type applicationRuntime struct {
-	mu      sync.Mutex
-	cfg     config.Config
-	logger  *slog.Logger
-	install func(http.Handler)
-	build   applicationBuilder
-	pools   *database.Pools
+	mu                sync.Mutex
+	cfg               config.Config
+	logger            *slog.Logger
+	install           func(http.Handler)
+	build             applicationBuilder
+	pools             *database.Pools
+	agentGRPC         *grpc.Server
+	agentListener     net.Listener
+	agentWorkerCancel context.CancelFunc
 }
 
 type applicationBuilder func(config.Config, *slog.Logger, *database.Pools, httpserver.Readiness) (http.Handler, error)
@@ -67,6 +78,10 @@ func (r *applicationRuntime) Check(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.pools != nil {
+		if r.agentWorkerCancel != nil {
+			r.agentWorkerCancel()
+			r.agentWorkerCancel = nil
+		}
 		return checkRuntimeDatabase(ctx, r.pools)
 	}
 	pools, err := database.OpenPools(ctx, r.cfg.Database)
@@ -83,6 +98,11 @@ func (r *applicationRuntime) Check(ctx context.Context) error {
 		return err
 	}
 	r.pools = pools
+	if err := r.startAgentGRPC(pools); err != nil {
+		pools.Close()
+		r.pools = nil
+		return err
+	}
 	r.install(handler)
 	r.logger.Info("control_plane_dependencies_ready", slog.Int64("schema_version", supportedSchemaVersion))
 	return nil
@@ -110,9 +130,78 @@ func (r *applicationRuntime) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.pools != nil {
+		if r.agentGRPC != nil {
+			r.agentGRPC.GracefulStop()
+			r.agentGRPC = nil
+		}
+		if r.agentListener != nil {
+			_ = r.agentListener.Close()
+			r.agentListener = nil
+		}
 		r.pools.Close()
 		r.pools = nil
 	}
+}
+
+func (r *applicationRuntime) startAgentGRPC(pools *database.Pools) error {
+	if r.cfg.AgentGRPC.Bind == "" {
+		return nil
+	}
+	service, err := nodes.NewService(pools, audit.NewService())
+	if err != nil {
+		return err
+	}
+	control, err := nodes.NewGRPCServer(service)
+	if err != nil {
+		return err
+	}
+	reconcileService, err := reconciler.NewService(pools, audit.NewService())
+	if err != nil {
+		return err
+	}
+	control.SetAgentMessageHandler(reconcileService.ApplyAgentMessage)
+	key, err := readSecretFile(r.cfg.KeyringFile, 32, 32)
+	if err != nil {
+		return fmt.Errorf("load reconciler keyring: %w", err)
+	}
+	ring, err := keyring.NewAESGCM(key)
+	clear(key)
+	if err != nil {
+		return err
+	}
+	secretProvider, err := secrets.NewEnvelopeProvider(ring)
+	if err != nil {
+		return err
+	}
+	worker, err := reconciler.NewWorker(pools, control.Registry(), secretProvider)
+	if err != nil {
+		return err
+	}
+	options := []grpc.ServerOption{grpc.MaxRecvMsgSize(r.cfg.AgentGRPC.MaxRecvBytes), grpc.MaxSendMsgSize(r.cfg.AgentGRPC.MaxSendBytes)}
+	if !r.cfg.AgentGRPC.Insecure {
+		cert, err := tls.LoadX509KeyPair(r.cfg.AgentGRPC.CertFile, r.cfg.AgentGRPC.KeyFile)
+		if err != nil {
+			return fmt.Errorf("load agent grpc certificate: %w", err)
+		}
+		options = append(options, grpc.Creds(credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS13})))
+	}
+	listener, err := net.Listen("tcp", r.cfg.AgentGRPC.Bind)
+	if err != nil {
+		return fmt.Errorf("listen agent grpc: %w", err)
+	}
+	server := grpc.NewServer(options...)
+	nodes.RegisterAgentControlServer(server, control)
+	r.agentListener, r.agentGRPC = listener, server
+	workerContext, cancelWorker := context.WithCancel(context.Background())
+	r.agentWorkerCancel = cancelWorker
+	go worker.Run(workerContext)
+	go func() {
+		if err := server.Serve(listener); err != nil && r.agentGRPC == server {
+			r.logger.Error("agent_grpc_failed", slog.String("error", err.Error()))
+		}
+	}()
+	r.logger.Info("agent_grpc_started", slog.String("bind", r.cfg.AgentGRPC.Bind), slog.Bool("insecure", r.cfg.AgentGRPC.Insecure))
+	return nil
 }
 
 func checkRuntimeDatabase(ctx context.Context, pools *database.Pools) error {
@@ -208,6 +297,38 @@ func buildApplicationHandler(cfg config.Config, logger *slog.Logger, pools *data
 	if err != nil {
 		return nil, err
 	}
+	nodeService, err := nodes.NewService(pools, auditService)
+	if err != nil {
+		return nil, err
+	}
+	nodeHTTP, err := nodes.NewHTTPHandler(nodeService, idempotency)
+	if err != nil {
+		return nil, err
+	}
+	endpointService, err := endpoints.NewService(pools, auditService)
+	if err != nil {
+		return nil, err
+	}
+	endpointHTTP, err := endpoints.NewHTTPHandler(endpointService, idempotency)
+	if err != nil {
+		return nil, err
+	}
+	operationService, err := operations.NewService(pools)
+	if err != nil {
+		return nil, err
+	}
+	operationHTTP, err := operations.NewHTTPHandler(operationService)
+	if err != nil {
+		return nil, err
+	}
+	reconcileService, err := reconciler.NewService(pools, auditService)
+	if err != nil {
+		return nil, err
+	}
+	reconcileHTTP, err := reconciler.NewHTTPHandler(reconcileService, idempotency)
+	if err != nil {
+		return nil, err
+	}
 	identityHTTP, err := identity.NewHTTPHandler(identity.HTTPOptions{
 		Sessions: sessions, OIDC: oidcService, Local: localService, Services: serviceIdentities,
 		Idempotency: idempotency, SessionCookie: cfg.Session.CookieName, TrustedOrigins: trustedOrigins(cfg.OIDC.RedirectURL),
@@ -229,7 +350,7 @@ func buildApplicationHandler(cfg config.Config, logger *slog.Logger, pools *data
 	}
 	return httpserver.NewRouter(httpserver.Dependencies{
 		Logger: logger, Readiness: readiness,
-		Modules: []httpserver.ModuleRoutes{identityHTTP, tenancyHTTP, accountHTTP, poolHTTP, auditHTTP}, Authenticate: identityHTTP.Authenticate,
+		Modules: []httpserver.ModuleRoutes{identityHTTP, tenancyHTTP, accountHTTP, poolHTTP, nodeHTTP, endpointHTTP, operationHTTP, reconcileHTTP, auditHTTP}, Authenticate: identityHTTP.Authenticate,
 	}), nil
 }
 

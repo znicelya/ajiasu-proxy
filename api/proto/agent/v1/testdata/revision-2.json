@@ -1,0 +1,7 @@
+{
+  "protocol_revision": 2,
+  "required_messages": ["hello", "heartbeat", "inventory_snapshot", "runner_observation", "operation_result", "command_ack"],
+  "runner_actions": ["create", "stop", "rebuild", "garbage_collect"],
+  "features": ["session_renewal", "maintenance_command", "runtime_limits"]
+}
+

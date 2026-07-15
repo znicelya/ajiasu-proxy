@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1.7
+ARG RUST_BUILD_IMAGE
+ARG RUNTIME_IMAGE
+FROM --platform=$BUILDPLATFORM ${RUST_BUILD_IMAGE} AS build
+WORKDIR /src
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates ./crates
+COPY api ./api
+RUN cargo build --release --package ajiasu-agent
+
+FROM ${RUNTIME_IMAGE}
+RUN addgroup -S agent && adduser -S -D -H -u 65532 -G agent agent \
+    && mkdir -p /var/lib/ajiasu-agent \
+    && chown -R 65532:65532 /var/lib/ajiasu-agent
+COPY --from=build /src/target/release/ajiasu-agent /usr/local/bin/ajiasu-agent
+USER 65532:65532
+ENV AJIASU_AGENT_STATE_DIRECTORY=/var/lib/ajiasu-agent
+ENV AJIASU_AGENT_RUNTIME=docker
+ENTRYPOINT ["/usr/local/bin/ajiasu-agent"]

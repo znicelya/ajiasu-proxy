@@ -16,15 +16,19 @@ type Subject struct {
 type Action string
 
 const (
-	ActionCreateTenant    Action = "create_tenant"
-	ActionUpdateTenant    Action = "update_tenant"
-	ActionAddMember       Action = "add_member"
-	ActionRemoveMember    Action = "remove_member"
-	ActionGrantRole       Action = "grant_role"
-	ActionRevokeRole      Action = "revoke_role"
-	ActionReadResources   Action = "read_tenant_resources"
-	ActionManageResources Action = "manage_tenant_resources"
-	ActionManageQuota     Action = "manage_tenant_quota"
+	ActionCreateTenant     Action = "create_tenant"
+	ActionUpdateTenant     Action = "update_tenant"
+	ActionAddMember        Action = "add_member"
+	ActionRemoveMember     Action = "remove_member"
+	ActionGrantRole        Action = "grant_role"
+	ActionRevokeRole       Action = "revoke_role"
+	ActionReadResources    Action = "read_tenant_resources"
+	ActionManageResources  Action = "manage_tenant_resources"
+	ActionOperateResources Action = "operate_tenant_resources"
+	ActionManageQuota      Action = "manage_tenant_quota"
+	ActionReadNodes        Action = "read_nodes"
+	ActionManageNodes      Action = "manage_nodes"
+	ActionReadPlatformOps  Action = "read_platform_operations"
 )
 
 type Scope string
@@ -56,7 +60,7 @@ func Authorize(subject Subject, action Action, target Target) Decision {
 		if target.TenantID != uuid.Nil {
 			return deny("invalid_scope")
 		}
-		if action != ActionCreateTenant && action != ActionUpdateTenant {
+		if action != ActionCreateTenant && action != ActionUpdateTenant && action != ActionReadNodes && action != ActionManageNodes && action != ActionReadPlatformOps {
 			return deny("action_scope_mismatch")
 		}
 		for _, role := range subject.PlatformRoles {
@@ -70,7 +74,7 @@ func Authorize(subject Subject, action Action, target Target) Decision {
 			return deny("invalid_scope")
 		}
 		switch action {
-		case ActionAddMember, ActionRemoveMember, ActionGrantRole, ActionRevokeRole, ActionReadResources, ActionManageResources, ActionManageQuota:
+		case ActionAddMember, ActionRemoveMember, ActionGrantRole, ActionRevokeRole, ActionReadResources, ActionManageResources, ActionOperateResources, ActionManageQuota:
 		default:
 			return deny("action_scope_mismatch")
 		}
@@ -79,6 +83,9 @@ func Authorize(subject Subject, action Action, target Target) Decision {
 				continue
 			}
 			if action == ActionReadResources && (grant.Role == TenantAdmin || grant.Role == Operator || grant.Role == Auditor) {
+				return Decision{Allowed: true, Reason: string(grant.Role)}
+			}
+			if action == ActionOperateResources && (grant.Role == TenantAdmin || grant.Role == Operator) {
 				return Decision{Allowed: true, Reason: string(grant.Role)}
 			}
 			if grant.Role == TenantAdmin {
