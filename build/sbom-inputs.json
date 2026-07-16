@@ -1,0 +1,14 @@
+{
+  "revision": 1,
+  "platforms": ["linux/amd64", "linux/arm64"],
+  "lock_file": "build/compose-images.lock",
+  "images": [
+    {"name": "control-plane", "dockerfile": "Dockerfile.control-plane", "binary": "/usr/local/bin/control-plane"},
+    {"name": "gateway", "dockerfile": "Dockerfile.gateway", "binary": "/usr/local/bin/ajiasu-gateway"},
+    {"name": "agent", "dockerfile": "Dockerfile.agent", "binary": "/usr/local/bin/ajiasu-agent"},
+    {"name": "runner", "dockerfile": "Dockerfile", "binary": "/usr/local/bin/ajiasu"}
+  ],
+  "test_images": [
+    {"name": "fake-runner", "dockerfile": "tests/e2e/Dockerfile.fake-runner", "production_allowed": false}
+  ]
+}

@@ -15,17 +15,26 @@ ARG TARGETARCH
 RUN runner/scripts/fetch-ajiasu.sh "$TARGETARCH" /out
 
 FROM ${ALPINE_IMAGE}
+ARG REVISION=unknown
+ARG SOURCE=https://github.com/dnomd343/ajiasu-proxy
 LABEL org.opencontainers.image.title="AJiaSu Runner" \
       org.opencontainers.image.version="4.2.3.0" \
-      org.opencontainers.image.description="Verified isolated runner for the official AJiaSu Linux CLI"
+      org.opencontainers.image.description="Verified isolated runner for the official AJiaSu Linux CLI" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.source="${SOURCE}" \
+      org.opencontainers.image.licenses="Proprietary" \
+      io.ajiasu.docker-socket="forbidden" \
+      io.ajiasu.privileged="false"
 RUN addgroup -g 65532 -S runner && adduser -S -D -H -u 65532 -G runner runner \
     && apk add --no-cache ca-certificates=20260611-r0 \
-    && mkdir -p /run/ajiasu /var/lib/ajiasu \
+    && mkdir -p /run/ajiasu /run/ajiasu-relay /var/lib/ajiasu \
     && ln -s /run/ajiasu/ajiasu.conf /etc/ajiasu.conf \
-    && chown -R 65532:65532 /run/ajiasu /var/lib/ajiasu
+    && chown -R 65532:65532 /run/ajiasu /run/ajiasu-relay /var/lib/ajiasu
 COPY --from=fetch --chmod=0555 /out/ajiasu /usr/local/bin/ajiasu
 COPY --chmod=0555 runner/bin/runner-entrypoint.sh /usr/local/bin/runner-entrypoint.sh
+COPY --chmod=0555 runner/bin/runner-healthcheck.sh /usr/local/bin/runner-healthcheck.sh
 USER 65532:65532
 WORKDIR /var/lib/ajiasu
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=6 CMD ["/usr/local/bin/runner-healthcheck.sh"]
 ENTRYPOINT ["/usr/local/bin/runner-entrypoint.sh"]
 CMD ["connect"]
