@@ -172,8 +172,8 @@ function Invoke-ControlPlaneImageLock {
         },
         @{
             Name = 'GO_BUILD_IMAGE'
-            Tag = 'golang:1.25.3-alpine3.22'
-            Digest = 'sha256:aee43c3ccbf24fdffb7295693b6e33b21e01baec1b2a55acc351fde345e9ec34'
+            Tag = 'golang:1.25.12-alpine3.23'
+            Digest = 'sha256:cc985ef6f9c3bf9ece7488129c9abe0a150388ccdfa428d886fc709dca0b230a'
         },
         @{
             Name = 'CONTROL_PLANE_RUNTIME_IMAGE'

@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           source build/control-plane-images.lock
-          [[ $GO_BUILD_IMAGE =~ ^golang:1\.25\.3-alpine3\.22@sha256:[0-9a-f]{64}$ ]]
+          [[ $GO_BUILD_IMAGE =~ ^golang:1\.25\.12-alpine3\.23@sha256:[0-9a-f]{64}$ ]]
           [[ $CONTROL_PLANE_RUNTIME_IMAGE =~ ^alpine:3\.22@sha256:[0-9a-f]{64}$ ]]
           printf 'build=%s\nruntime=%s\n' "$GO_BUILD_IMAGE" "$CONTROL_PLANE_RUNTIME_IMAGE" >>"$GITHUB_OUTPUT"
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6

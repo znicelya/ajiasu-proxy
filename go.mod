@@ -2,7 +2,7 @@ module github.com/dnomd343/ajiasu-proxy
 
 go 1.25.0
 
-toolchain go1.25.3
+toolchain go1.25.12
 
 require (
 	github.com/getkin/kin-openapi v0.142.0
@@ -13,7 +13,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/testcontainers/testcontainers-go v0.43.0
 	go.opentelemetry.io/otel v1.44.0
-	golang.org/x/crypto v0.51.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/net v0.55.0
 	golang.org/x/term v0.43.0
 	google.golang.org/grpc v1.79.3

@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 $expectedByTag = @{
     'postgres:17.6-alpine3.22' = 'sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94'
     'quay.io/keycloak/keycloak:26.3.2' = 'sha256:98fab020a3a490aba0978f237e2a06cd0ea42bf149c6cf10f11c0aaf27728ff2'
-    'golang:1.25.3-alpine3.22' = 'sha256:aee43c3ccbf24fdffb7295693b6e33b21e01baec1b2a55acc351fde345e9ec34'
+    'golang:1.25.12-alpine3.23' = 'sha256:cc985ef6f9c3bf9ece7488129c9abe0a150388ccdfa428d886fc709dca0b230a'
     'alpine:3.22' = 'sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce'
 }
 $manifestInspections = 0
