@@ -183,3 +183,26 @@ function Assert-ComposeGeneratedState {
         if (-not $allowed.ContainsKey($item.Name)) { throw "Unexpected generated-state entry: $($item.Name)" }
     }
 }
+
+function Read-ComposeEnvironmentFile {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $values = @{}
+    foreach ($line in Get-Content -LiteralPath $Path) { if ($line -match '^([^#=]+)=(.*)$') { $values[$matches[1]] = $matches[2] } }
+    return $values
+}
+
+function Assert-ComposeBackup {
+    param([Parameter(Mandatory = $true)][string]$Directory, [string]$EnvironmentId)
+    $manifestPath = Join-Path $Directory 'backup-manifest.json'
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'Backup manifest is unavailable' }
+    $manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json
+    if ($manifest.backup_version -ne 1 -or $manifest.schema_version -ne 11) { throw 'Backup schema is incompatible' }
+    if ($EnvironmentId -and $manifest.environment_id -cne $EnvironmentId) { throw 'Backup belongs to another environment' }
+    foreach ($artifact in @($manifest.database, $manifest.keyring, $manifest.configuration, $manifest.ca)) {
+        $path = Join-Path $Directory ([string]$artifact.file)
+        $item = Get-Item -LiteralPath $path -Force
+        if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Backup artifact is unsafe' }
+        if ($item.Length -ne [int64]$artifact.size -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -cne [string]$artifact.sha256) { throw 'Backup artifact checksum mismatch' }
+    }
+    return $manifest
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ajiasu.example/schemas/compose/backup-manifest-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["backup_version", "environment_id", "created_at", "schema_version", "release", "database", "keyring", "configuration", "ca", "excluded"],
+  "properties": {
+    "backup_version": { "const": 1 },
+    "environment_id": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "schema_version": { "const": 11 },
+    "release": { "type": "object" },
+    "database": { "$ref": "#/$defs/artifact" },
+    "keyring": { "$ref": "#/$defs/artifact" },
+    "configuration": { "$ref": "#/$defs/artifact" },
+    "ca": { "$ref": "#/$defs/artifact" },
+    "excluded": { "const": ["redis", "leases", "sessions", "runner-state", "route-cache"] }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "sha256", "size"],
+      "properties": {
+        "file": { "type": "string", "pattern": "^[a-z0-9./-]+$" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "size": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

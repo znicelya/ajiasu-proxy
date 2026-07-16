@@ -1,25 +1,15 @@
 -- +goose Up
-CREATE ROLE ajiasu_app
-    NOLOGIN
-    NOSUPERUSER
-    NOCREATEDB
-    NOCREATEROLE
-    NOREPLICATION
-    NOBYPASSRLS;
-
-CREATE ROLE ajiasu_platform
-    NOLOGIN
-    NOSUPERUSER
-    NOCREATEDB
-    NOCREATEROLE
-    NOREPLICATION
-    NOBYPASSRLS;
-
--- Single-host Compose creates restricted login roles before migrations. Grant
--- group membership only when those optional login roles are present.
+-- Single-host restore needs group roles before pg_restore can apply object
+-- ownership and ACLs. Fresh and external installs create missing groups here.
 -- +goose StatementBegin
 DO $$
 BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ajiasu_app') THEN
+        CREATE ROLE ajiasu_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ajiasu_platform') THEN
+        CREATE ROLE ajiasu_platform NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+    END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ajiasu_normal') THEN
         GRANT ajiasu_app TO ajiasu_normal;
     END IF;
