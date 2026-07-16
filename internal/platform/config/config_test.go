@@ -261,7 +261,7 @@ func TestConfigLogValueRedactsSecrets(t *testing.T) {
 		t.Fatalf("invalid JSON log: %v", err)
 	}
 
-	for _, secret := range []string{"normal-password", "platform-password", "oidc-secret", "session-cookie", "0123456789abcdef0123456789abcdef"} {
+	for _, secret := range []string{"normal-password", "platform-password", "oidc-secret", "redis-secret", "session-cookie", "0123456789abcdef0123456789abcdef"} {
 		if strings.Contains(output.String(), secret) {
 			t.Errorf("log contains secret %q: %s", secret, output.String())
 		}
@@ -286,6 +286,7 @@ func TestConfigStringRedactsSecrets(t *testing.T) {
 			"normal-password",
 			"platform-password",
 			cfg.OIDC.ClientSecretFile,
+			cfg.Redis.PasswordFile,
 			"session-cookie",
 			cfg.KeyringFile,
 			"0123456789abcdef0123456789abcdef",
@@ -312,34 +313,47 @@ func validEnvironment(t *testing.T) map[string]string {
 	if err := os.WriteFile(clientSecret, []byte("oidc-secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	redisPassword := filepath.Join(dir, "redis-password")
+	if err := os.WriteFile(redisPassword, []byte("redis-secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	return map[string]string{
-		"AJIASU_ENVIRONMENT":                "development",
-		"AJIASU_HTTP_BIND":                  "127.0.0.1:8080",
-		"AJIASU_HTTP_READ_HEADER_TIMEOUT":   "2s",
-		"AJIASU_HTTP_READ_TIMEOUT":          "3s",
-		"AJIASU_HTTP_WRITE_TIMEOUT":         "4s",
-		"AJIASU_HTTP_IDLE_TIMEOUT":          "5s",
-		"AJIASU_HTTP_SHUTDOWN_TIMEOUT":      "7s",
-		"AJIASU_AGENT_GRPC_BIND":            "127.0.0.1:9090",
-		"AJIASU_AGENT_GRPC_INSECURE":        "true",
-		"AJIASU_DATABASE_NORMAL_DSN":        "postgres://normal:normal-password@localhost/normal",
-		"AJIASU_DATABASE_NORMAL_MAX_OPEN":   "8",
-		"AJIASU_DATABASE_NORMAL_MIN_IDLE":   "4",
-		"AJIASU_DATABASE_PLATFORM_DSN":      "postgres://platform:platform-password@localhost/platform",
-		"AJIASU_DATABASE_PLATFORM_MAX_OPEN": "6",
-		"AJIASU_DATABASE_PLATFORM_MIN_IDLE": "3",
-		"AJIASU_OIDC_ISSUER":                "https://issuer.example.test",
-		"AJIASU_OIDC_CLIENT_ID":             "control-plane",
-		"AJIASU_OIDC_CLIENT_SECRET_FILE":    clientSecret,
-		"AJIASU_OIDC_REDIRECT_URL":          "https://proxy.example.test/callback",
-		"AJIASU_SESSION_COOKIE_NAME":        "session-cookie",
-		"AJIASU_SESSION_COOKIE_SECURE":      "false",
-		"AJIASU_SESSION_IDLE_TIMEOUT":       "30m",
-		"AJIASU_SESSION_ABSOLUTE_TIMEOUT":   "12h",
-		"AJIASU_KEYRING_FILE":               keyring,
-		"AJIASU_LOCAL_AUTH_ENABLED":         "true",
-		"AJIASU_LOCAL_AUTH_ALLOWED_CIDRS":   "127.0.0.0/8,::1/128",
+		"AJIASU_ENVIRONMENT":                    "development",
+		"AJIASU_HTTP_BIND":                      "127.0.0.1:8080",
+		"AJIASU_HTTP_READ_HEADER_TIMEOUT":       "2s",
+		"AJIASU_HTTP_READ_TIMEOUT":              "3s",
+		"AJIASU_HTTP_WRITE_TIMEOUT":             "4s",
+		"AJIASU_HTTP_IDLE_TIMEOUT":              "5s",
+		"AJIASU_HTTP_SHUTDOWN_TIMEOUT":          "7s",
+		"AJIASU_AGENT_GRPC_BIND":                "127.0.0.1:9090",
+		"AJIASU_AGENT_GRPC_INSECURE":            "true",
+		"AJIASU_DATABASE_NORMAL_DSN":            "postgres://normal:normal-password@localhost/normal",
+		"AJIASU_DATABASE_NORMAL_MAX_OPEN":       "8",
+		"AJIASU_DATABASE_NORMAL_MIN_IDLE":       "4",
+		"AJIASU_DATABASE_PLATFORM_DSN":          "postgres://platform:platform-password@localhost/platform",
+		"AJIASU_DATABASE_PLATFORM_MAX_OPEN":     "6",
+		"AJIASU_DATABASE_PLATFORM_MIN_IDLE":     "3",
+		"AJIASU_REDIS_ADDRESS":                  "127.0.0.1:6379",
+		"AJIASU_REDIS_USERNAME":                 "scheduler",
+		"AJIASU_REDIS_PASSWORD_FILE":            redisPassword,
+		"AJIASU_REDIS_DATABASE":                 "0",
+		"AJIASU_REDIS_TLS":                      "false",
+		"AJIASU_REDIS_OPERATION_TIMEOUT":        "1s",
+		"AJIASU_SCHEDULER_LEASE_NAMESPACE":      "ajiasu:lease:v1",
+		"AJIASU_SCHEDULER_LEASE_TTL":            "9s",
+		"AJIASU_SCHEDULER_LEASE_RENEW_INTERVAL": "2s",
+		"AJIASU_OIDC_ISSUER":                    "https://issuer.example.test",
+		"AJIASU_OIDC_CLIENT_ID":                 "control-plane",
+		"AJIASU_OIDC_CLIENT_SECRET_FILE":        clientSecret,
+		"AJIASU_OIDC_REDIRECT_URL":              "https://proxy.example.test/callback",
+		"AJIASU_SESSION_COOKIE_NAME":            "session-cookie",
+		"AJIASU_SESSION_COOKIE_SECURE":          "false",
+		"AJIASU_SESSION_IDLE_TIMEOUT":           "30m",
+		"AJIASU_SESSION_ABSOLUTE_TIMEOUT":       "12h",
+		"AJIASU_KEYRING_FILE":                   keyring,
+		"AJIASU_LOCAL_AUTH_ENABLED":             "true",
+		"AJIASU_LOCAL_AUTH_ALLOWED_CIDRS":       "127.0.0.0/8,::1/128",
 	}
 }
 

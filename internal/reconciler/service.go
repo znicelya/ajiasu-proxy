@@ -80,6 +80,16 @@ func (s *Service) ApplyObservation(ctx context.Context, o Observation) error {
 		if _, err := tx.Exec(ctx, `UPDATE endpoints.endpoint_status SET observed_generation=$1,observed_state=$2,runner_id=$3,reason_code=$4,last_agent_observation_at=$5,last_transition_at=CASE WHEN observed_state<>$2 THEN $5 ELSE last_transition_at END,updated_at=$6 WHERE tenant_id=$7 AND endpoint_id=$8`, o.Generation, status, o.RunnerID, strings.TrimSpace(o.ReasonCode), o.ObservedAt.UTC(), now, tenantID, endpointID); err != nil {
 			return struct{}{}, mapError(err)
 		}
+		if o.State == RunnerRunning {
+			if _, err := tx.Exec(ctx, `UPDATE scheduler.endpoint_assignments SET state='assigned',health_state='healthy',runner_id=$1,valid_until=$2,last_reason_code='runner_running',updated_at=$3 WHERE tenant_id=$4 AND endpoint_id=$5 AND desired_generation=$6 AND node_id=$7`, o.RunnerID, now.Add(5*time.Minute), now, tenantID, endpointID, o.Generation, o.NodeID); err != nil {
+				return struct{}{}, mapError(err)
+			}
+		}
+		if o.State == RunnerFailed || o.State == RunnerOrphaned {
+			if _, err := tx.Exec(ctx, `UPDATE scheduler.endpoint_assignments SET state='blocked',health_state='unhealthy',retry_attempts=LEAST(retry_attempts+1,1000),cooldown_until=$1,last_reason_code=$2,updated_at=$3 WHERE tenant_id=$4 AND endpoint_id=$5 AND desired_generation=$6`, now.Add(retryDelay(o.Generation)), strings.TrimSpace(o.ReasonCode), now, tenantID, endpointID, o.Generation); err != nil {
+				return struct{}{}, mapError(err)
+			}
+		}
 		if o.State == RunnerRunning || o.State == RunnerStopped {
 			if _, err := tx.Exec(ctx, `UPDATE operations.operations SET state='succeeded',progress_category='completed',result_code=$1,safe_message='',completed_at=$2,updated_at=$2 WHERE id=$3`, "runner_"+status, now, o.OperationID); err != nil {
 				return struct{}{}, mapError(err)
@@ -89,6 +99,9 @@ func (s *Service) ApplyObservation(ctx context.Context, o Observation) error {
 			}
 		}
 		if o.State == RunnerStopped {
+			if _, err := tx.Exec(ctx, `UPDATE scheduler.endpoint_assignments SET state='unassigned',runner_id=NULL,valid_until=NULL,last_reason_code='runner_stopped',updated_at=$1 WHERE tenant_id=$2 AND endpoint_id=$3 AND runner_id=$4`, now, tenantID, endpointID, o.RunnerID); err != nil {
+				return struct{}{}, mapError(err)
+			}
 			if _, err := tx.Exec(ctx, `DELETE FROM reconciler.runner_desired_states WHERE runner_id=$1`, o.RunnerID); err != nil {
 				return struct{}{}, mapError(err)
 			}

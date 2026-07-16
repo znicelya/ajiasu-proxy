@@ -24,6 +24,9 @@ var (
 	ErrSessionExpired      = errors.New("gateway session expired")
 	ErrSessionRevoked      = errors.New("gateway session revoked")
 	ErrStaleVersion        = errors.New("gateway snapshot version is stale")
+	ErrSnapshotRequired    = errors.New("gateway route snapshot is required")
+	ErrStaleAssignment     = errors.New("gateway assignment generation is stale")
+	ErrRouteUnavailable    = errors.New("gateway route is not accepting new connections")
 	ErrInvalidGrant        = errors.New("invalid route grant")
 )
 
@@ -105,12 +108,18 @@ func (g RouteGrant) Verify(publicKey ed25519.PublicKey, audience uuid.UUID, now 
 }
 
 type Route struct {
-	TenantID    uuid.UUID
-	EndpointID  uuid.UUID
-	PolicyHash  string
-	Protocols   []string
-	Credentials []CredentialVerifier
-	Grant       RouteGrant
+	TenantID             uuid.UUID
+	EndpointID           uuid.UUID
+	PolicyHash           string
+	Protocols            []string
+	Credentials          []CredentialVerifier
+	Grant                RouteGrant
+	AssignmentID         uuid.UUID
+	AssignmentGeneration uint64
+	AccountID            uuid.UUID
+	NodeID               uuid.UUID
+	AssignmentState      string
+	ValidUntil           time.Time
 }
 type CredentialVerifier struct {
 	ID               uuid.UUID

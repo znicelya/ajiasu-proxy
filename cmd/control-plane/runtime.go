@@ -29,13 +29,15 @@ import (
 	accountpools "github.com/dnomd343/ajiasu-proxy/internal/pools"
 	"github.com/dnomd343/ajiasu-proxy/internal/proxyaccess"
 	"github.com/dnomd343/ajiasu-proxy/internal/reconciler"
+	"github.com/dnomd343/ajiasu-proxy/internal/scheduler"
 	"github.com/dnomd343/ajiasu-proxy/internal/secrets"
 	"github.com/dnomd343/ajiasu-proxy/internal/tenancy"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
-const supportedSchemaVersion int64 = 10
+const supportedSchemaVersion int64 = 11
 
 var errSchemaIncompatible = errors.New("schema version is incompatible")
 
@@ -64,6 +66,7 @@ type applicationRuntime struct {
 	install           func(http.Handler)
 	build             applicationBuilder
 	pools             *database.Pools
+	handler           http.Handler
 	agentGRPC         *grpc.Server
 	agentListener     net.Listener
 	agentWorkerCancel context.CancelFunc
@@ -100,10 +103,14 @@ func (r *applicationRuntime) Check(ctx context.Context) error {
 	}
 	r.pools = pools
 	if err := r.startAgentGRPC(pools); err != nil {
+		if closer, ok := handler.(interface{ Close() error }); ok {
+			_ = closer.Close()
+		}
 		pools.Close()
 		r.pools = nil
 		return err
 	}
+	r.handler = handler
 	r.install(handler)
 	r.logger.Info("control_plane_dependencies_ready", slog.Int64("schema_version", supportedSchemaVersion))
 	return nil
@@ -131,6 +138,10 @@ func (r *applicationRuntime) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.pools != nil {
+		if closer, ok := r.handler.(interface{ Close() error }); ok {
+			_ = closer.Close()
+		}
+		r.handler = nil
 		if r.agentGRPC != nil {
 			r.agentGRPC.GracefulStop()
 			r.agentGRPC = nil
@@ -142,6 +153,18 @@ func (r *applicationRuntime) Close() {
 		r.pools.Close()
 		r.pools = nil
 	}
+}
+
+type managedHandler struct {
+	http.Handler
+	close func() error
+}
+
+func (handler *managedHandler) Close() error {
+	if handler == nil || handler.close == nil {
+		return nil
+	}
+	return handler.close()
 }
 
 func (r *applicationRuntime) startAgentGRPC(pools *database.Pools) error {
@@ -357,10 +380,41 @@ func buildApplicationHandler(cfg config.Config, logger *slog.Logger, pools *data
 	if err != nil {
 		return nil, err
 	}
-	return httpserver.NewRouter(httpserver.Dependencies{
+	redisPasswordBytes, err := readSecretFile(cfg.Redis.PasswordFile, 1, 64*1024)
+	if err != nil {
+		return nil, fmt.Errorf("load Redis password: %w", err)
+	}
+	redisPassword := string(bytes.TrimSpace(redisPasswordBytes))
+	clear(redisPasswordBytes)
+	redisClient, err := scheduler.NewRedisClient(scheduler.RedisOptions{Address: cfg.Redis.Address, Username: cfg.Redis.Username, Password: redisPassword, Database: cfg.Redis.Database, TLS: cfg.Redis.TLS})
+	if err != nil {
+		return nil, err
+	}
+	ownerID, err := uuid.NewV7()
+	if err != nil {
+		_ = redisClient.Close()
+		return nil, err
+	}
+	leaseManager, err := scheduler.NewLeaseManager(redisClient, scheduler.LeaseConfig{Namespace: cfg.Redis.LeaseNamespace, TTL: cfg.Redis.LeaseTTL, RenewInterval: cfg.Redis.LeaseRenewInterval, Timeout: cfg.Redis.OperationTimeout}, ownerID)
+	if err != nil {
+		_ = redisClient.Close()
+		return nil, err
+	}
+	assignmentService, err := scheduler.NewAssignmentService(pools, leaseManager)
+	if err != nil {
+		_ = redisClient.Close()
+		return nil, err
+	}
+	schedulerHTTP, err := scheduler.NewHTTPHandler(assignmentService, idempotency)
+	if err != nil {
+		_ = redisClient.Close()
+		return nil, err
+	}
+	router := httpserver.NewRouter(httpserver.Dependencies{
 		Logger: logger, Readiness: readiness,
-		Modules: []httpserver.ModuleRoutes{identityHTTP, tenancyHTTP, accountHTTP, poolHTTP, nodeHTTP, endpointHTTP, proxyAccessHTTP, operationHTTP, reconcileHTTP, auditHTTP}, Authenticate: identityHTTP.Authenticate,
-	}), nil
+		Modules: []httpserver.ModuleRoutes{identityHTTP, tenancyHTTP, accountHTTP, poolHTTP, nodeHTTP, endpointHTTP, proxyAccessHTTP, operationHTTP, reconcileHTTP, schedulerHTTP, auditHTTP}, Authenticate: identityHTTP.Authenticate,
+	})
+	return &managedHandler{Handler: router, close: redisClient.Close}, nil
 }
 
 func readSecretFile(path string, minimum, maximum int) ([]byte, error) {

@@ -140,6 +140,10 @@ Files are grouped by responsibility. Go packages remain internal until a cross-p
 
 **Detailed plan:** `docs/superpowers/plans/2026-07-16-scheduler-leases-health-failover.md`
 
+**Operations:** `docs/operations/control-plane-phase6.md`
+
+**Compatibility:** `docs/operations/compatibility-matrix.md`
+
 **Entry dependency:** Phases 3-5 expose stable account, node, Runner, Gateway, and policy contracts.
 
 **Produces:**

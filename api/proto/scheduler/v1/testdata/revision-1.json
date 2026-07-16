@@ -1,0 +1,21 @@
+{
+  "protocol_revision": 1,
+  "required_messages": [
+    "assignment_intent",
+    "reconcile_request",
+    "health_observation",
+    "reconcile_outcome",
+    "lease_ownership_lost"
+  ],
+  "assignment_states": [
+    "unassigned",
+    "acquiring",
+    "assigned",
+    "draining",
+    "migrating",
+    "releasing",
+    "blocked",
+    "failed"
+  ],
+  "health_dimensions": ["process", "tunnel", "egress", "account"]
+}

@@ -80,8 +80,10 @@ func (h *HTTPHandler) create(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Name               string             `json:"name"`
+		BindingMode        string             `json:"binding_mode"`
 		AccountID          uuid.UUID          `json:"account_id"`
 		NodeID             uuid.UUID          `json:"node_id"`
+		PoolID             uuid.UUID          `json:"pool_id"`
 		DesiredRunnerState DesiredRunnerState `json:"desired_runner_state"`
 	}
 	body, err := httpserver.DecodeJSONBytes(r, &req)
@@ -90,7 +92,7 @@ func (h *HTTPHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response, _, err := h.idempotency.ExecuteJSON(r.Context(), idem(r, p, t, "/api/v1/tenants/{tenant_id}/endpoints", body), func(ctx context.Context) (int, any, error) {
-		endpoint, operation, err := h.service.Create(ctx, a, CreateCommand{Name: req.Name, AccountID: req.AccountID, NodeID: req.NodeID, DesiredRunnerState: req.DesiredRunnerState})
+		endpoint, operation, err := h.service.Create(ctx, a, CreateCommand{Name: req.Name, BindingMode: req.BindingMode, AccountID: req.AccountID, NodeID: req.NodeID, PoolID: req.PoolID, DesiredRunnerState: req.DesiredRunnerState})
 		return http.StatusAccepted, map[string]any{"endpoint": endpoint, "operation": operation}, err
 	})
 	if err != nil {
@@ -259,6 +261,8 @@ func (h *HTTPHandler) writeError(w http.ResponseWriter, r *http.Request, err err
 		httpserver.WriteError(w, r, http.StatusConflict, "node_capacity_exhausted", "node runner capacity is exhausted", nil)
 	case errors.Is(err, ErrAccountCapacity):
 		httpserver.WriteError(w, r, http.StatusConflict, "account_capacity_exhausted", "account capacity is exhausted", nil)
+	case errors.Is(err, ErrPoolAssignmentRequired):
+		httpserver.WriteError(w, r, http.StatusConflict, "pool_assignment_required", "pool endpoint must be reconciled by the scheduler", nil)
 	default:
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "a required dependency is unavailable", nil)
 	}

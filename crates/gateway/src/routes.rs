@@ -33,6 +33,12 @@ pub struct Route {
     pub protocols: Vec<String>,
     pub runner_id: Uuid,
     pub generation: u64,
+    pub assignment_id: Uuid,
+    pub assignment_generation: u64,
+    pub account_id: Uuid,
+    pub node_id: Uuid,
+    pub assignment_state: String,
+    pub valid_until: SystemTime,
     pub grant: Grant,
     pub credentials: Vec<Credential>,
 }
@@ -52,8 +58,14 @@ pub struct Delta {
 pub enum RouteError {
     #[error("route snapshot version is stale")]
     StaleVersion,
+    #[error("route snapshot recovery is required")]
+    SnapshotRequired,
+    #[error("route assignment generation is stale")]
+    StaleAssignment,
     #[error("route not found")]
     NotFound,
+    #[error("route is not accepting new connections")]
+    Unavailable,
     #[error("route grant is expired or mismatched")]
     StaleGrant,
     #[error("protocol is not enabled")]
@@ -80,24 +92,55 @@ impl RouteTable {
         if snapshot.version == 0 || snapshot.version < state.version {
             return Err(RouteError::StaleVersion);
         }
-        let routes = snapshot
-            .routes
-            .into_iter()
-            .map(|route| ((route.tenant_id, route.endpoint_id), route))
-            .collect();
+        let mut routes = HashMap::new();
+        for route in snapshot.routes {
+            validate_committed_route(&route)?;
+            let key = (route.tenant_id, route.endpoint_id);
+            if state
+                .routes
+                .get(&key)
+                .is_some_and(|current| route.assignment_generation < current.assignment_generation)
+            {
+                return Err(RouteError::StaleAssignment);
+            }
+            routes.insert(key, route);
+        }
+        if snapshot.version == state.version {
+            if routes == state.routes {
+                return Ok(());
+            }
+            return Err(RouteError::StaleVersion);
+        }
         state.routes = routes;
         state.version = snapshot.version;
         Ok(())
     }
     pub fn apply_delta(&self, delta: Delta) -> Result<(), RouteError> {
         let mut state = self.inner.write().map_err(|_| RouteError::StaleVersion)?;
-        if delta.version <= state.version {
+        if delta.version < state.version {
             return Err(RouteError::StaleVersion);
         }
         let key = (delta.route.tenant_id, delta.route.endpoint_id);
+        if delta.version == state.version {
+            if (delta.revoked && !state.routes.contains_key(&key))
+                || (!delta.revoked && state.routes.get(&key) == Some(&delta.route))
+            {
+                return Ok(());
+            }
+            return Err(RouteError::StaleVersion);
+        }
+        if state.version != 0 && delta.version != state.version + 1 {
+            return Err(RouteError::SnapshotRequired);
+        }
+        if state.routes.get(&key).is_some_and(|current| {
+            delta.route.assignment_generation < current.assignment_generation
+        }) {
+            return Err(RouteError::StaleAssignment);
+        }
         if delta.revoked {
             state.routes.remove(&key);
         } else {
+            validate_committed_route(&delta.route)?;
             state.routes.insert(key, delta.route);
         }
         state.version = delta.version;
@@ -116,6 +159,9 @@ impl RouteTable {
             .get(&(tenant_id, endpoint_id))
             .cloned()
             .ok_or(RouteError::NotFound)?;
+        if route.assignment_state != "assigned" || route.valid_until <= now {
+            return Err(RouteError::Unavailable);
+        }
         if !route.protocols.iter().any(|item| item == protocol)
             || !route.grant.protocols.iter().any(|item| item == protocol)
         {
@@ -124,6 +170,7 @@ impl RouteTable {
         if route.grant.gateway_id.is_nil()
             || route.grant.runner_id != route.runner_id
             || route.grant.generation != route.generation
+            || route.assignment_generation != route.generation
             || route.grant.policy_hash != route.policy_hash
             || route.grant.expires_at <= now
         {
@@ -137,6 +184,25 @@ impl RouteTable {
             .map(|state| state.version)
             .unwrap_or_default()
     }
+}
+
+fn validate_committed_route(route: &Route) -> Result<(), RouteError> {
+    if route.tenant_id.is_nil()
+        || route.endpoint_id.is_nil()
+        || route.runner_id.is_nil()
+        || route.assignment_id.is_nil()
+        || route.account_id.is_nil()
+        || route.node_id.is_nil()
+        || route.generation == 0
+        || route.assignment_generation != route.generation
+        || route.grant.runner_id != route.runner_id
+        || route.grant.generation != route.generation
+        || route.grant.policy_hash != route.policy_hash
+        || !matches!(route.assignment_state.as_str(), "assigned" | "draining")
+    {
+        return Err(RouteError::StaleGrant);
+    }
+    Ok(())
 }
 
 impl Default for RouteTable {
@@ -161,6 +227,12 @@ mod tests {
             protocols: vec!["connect".into()],
             runner_id: runner,
             generation: 2,
+            assignment_id: Uuid::from_u128(5),
+            assignment_generation: 2,
+            account_id: Uuid::from_u128(6),
+            node_id: Uuid::from_u128(7),
+            assignment_state: "assigned".into(),
+            valid_until: expiry,
             grant: Grant {
                 gateway_id: gateway,
                 runner_id: runner,
@@ -189,7 +261,7 @@ mod tests {
                 route: item.clone(),
                 revoked: false
             }),
-            Err(RouteError::StaleVersion)
+            Ok(())
         );
         assert!(
             table
@@ -201,5 +273,45 @@ mod tests {
                 )
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn requires_snapshot_for_gaps_and_blocks_draining_routes() {
+        let table = RouteTable::new();
+        let item = route();
+        table
+            .apply_snapshot(Snapshot {
+                version: 4,
+                routes: vec![item.clone()],
+            })
+            .unwrap();
+        assert_eq!(
+            table.apply_delta(Delta {
+                version: 6,
+                route: item.clone(),
+                revoked: false,
+            }),
+            Err(RouteError::SnapshotRequired)
+        );
+        let mut draining = item.clone();
+        draining.assignment_state = "draining".into();
+        table
+            .apply_delta(Delta {
+                version: 5,
+                route: draining,
+                revoked: false,
+            })
+            .unwrap();
+        assert_eq!(
+            table.select(
+                item.tenant_id,
+                item.endpoint_id,
+                "connect",
+                SystemTime::now()
+            ),
+            Err(RouteError::Unavailable)
+        );
+        let established = item;
+        assert_eq!(established.assignment_state, "assigned");
     }
 }

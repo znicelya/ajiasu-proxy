@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package ajiasu.scheduler.v1;
+
+option go_package = "github.com/dnomd343/ajiasu-proxy/internal/gen/scheduler/v1;schedulerv1";
+
+// Scheduler events are internal control-plane contracts. Redis lease values
+// and account credentials are never transported through this protocol.
+service SchedulerControl {
+  rpc Report(stream SchedulerEvent) returns (stream SchedulerCommand);
+}
+
+message SchedulerEvent {
+  uint32 protocol_revision = 1;
+  string event_id = 2;
+  string observed_at = 3;
+  oneof body {
+    HealthObservation health_observation = 10;
+    ReconcileOutcome reconcile_outcome = 11;
+    LeaseOwnershipLost lease_ownership_lost = 12;
+  }
+  reserved 4 to 9;
+  reserved 13 to 19;
+}
+
+message SchedulerCommand {
+  uint32 protocol_revision = 1;
+  string command_id = 2;
+  oneof body {
+    AssignmentIntent assignment_intent = 10;
+    ReconcileRequest reconcile_request = 11;
+  }
+  reserved 3 to 9;
+  reserved 12 to 19;
+}
+
+message AssignmentKey {
+  string tenant_id = 1;
+  string endpoint_id = 2;
+}
+
+message AssignmentIntent {
+  AssignmentKey key = 1;
+  string assignment_id = 2;
+  string pool_id = 3;
+  string account_id = 4;
+  string node_id = 5;
+  string runner_id = 6;
+  uint64 desired_generation = 7;
+  uint64 fencing_token = 8;
+  string strategy = 9;
+  AssignmentState state = 10;
+  string created_at = 11;
+  reserved 12 to 19;
+}
+
+message ReconcileRequest {
+  AssignmentKey key = 1;
+  string assignment_id = 2;
+  uint64 desired_generation = 3;
+  uint64 fencing_token = 4;
+  string reason_code = 5;
+  reserved 6 to 15;
+}
+
+message HealthObservation {
+  string tenant_id = 1;
+  string resource_type = 2;
+  string resource_id = 3;
+  HealthDimension dimension = 4;
+  HealthResult result = 5;
+  uint64 generation = 6;
+  string reason_code = 7;
+  string observed_at = 8;
+  uint64 sequence = 9;
+  reserved 10 to 19;
+}
+
+message ReconcileOutcome {
+  AssignmentKey key = 1;
+  string assignment_id = 2;
+  uint64 desired_generation = 3;
+  uint64 fencing_token = 4;
+  AssignmentState state = 5;
+  string result_code = 6;
+  uint32 attempts = 7;
+  string completed_at = 8;
+  reserved 9 to 19;
+}
+
+message LeaseOwnershipLost {
+  AssignmentKey key = 1;
+  string resource_type = 2;
+  string resource_id = 3;
+  uint64 fencing_token = 4;
+  string reason_code = 5;
+  string observed_at = 6;
+  reserved 7 to 15;
+}
+
+enum AssignmentState {
+  ASSIGNMENT_STATE_UNSPECIFIED = 0;
+  ASSIGNMENT_STATE_UNASSIGNED = 1;
+  ASSIGNMENT_STATE_ACQUIRING = 2;
+  ASSIGNMENT_STATE_ASSIGNED = 3;
+  ASSIGNMENT_STATE_DRAINING = 4;
+  ASSIGNMENT_STATE_MIGRATING = 5;
+  ASSIGNMENT_STATE_RELEASING = 6;
+  ASSIGNMENT_STATE_BLOCKED = 7;
+  ASSIGNMENT_STATE_FAILED = 8;
+}
+
+enum HealthDimension {
+  HEALTH_DIMENSION_UNSPECIFIED = 0;
+  HEALTH_DIMENSION_PROCESS = 1;
+  HEALTH_DIMENSION_TUNNEL = 2;
+  HEALTH_DIMENSION_EGRESS = 3;
+  HEALTH_DIMENSION_ACCOUNT = 4;
+}
+
+enum HealthResult {
+  HEALTH_RESULT_UNSPECIFIED = 0;
+  HEALTH_RESULT_SUCCESS = 1;
+  HEALTH_RESULT_FAILURE = 2;
+}

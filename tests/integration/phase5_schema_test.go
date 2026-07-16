@@ -27,7 +27,7 @@ func TestPhase5SchemaMigratesAndForcesTenantRLS(t *testing.T) {
 	if err := admin.QueryRow(t.Context(), `SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version`).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 10 {
-		t.Fatalf("schema version=%d want 10", version)
+	if version != 11 {
+		t.Fatalf("schema version=%d want 11", version)
 	}
 }
