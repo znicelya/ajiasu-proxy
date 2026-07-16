@@ -1,6 +1,6 @@
 # AJiaSu Enterprise Proxy Platform Foundation
 
-This repository is the secure Runner and supply-chain foundation for a planned enterprise proxy platform. It is not a finished single-container VPN workflow or a production orchestration package. The broader platform will add a control plane, tenant isolation, policy, scheduling, gateways, observability, and deployment packaging in later phases.
+This repository contains the secure Runner foundation and the Phase 7 Docker Compose production package for the AJiaSu enterprise proxy platform. The package provides a Control Plane, one host Agent, one active Gateway, PostgreSQL/Redis dependency profiles, mutual TLS, one-time enrollment, lifecycle operations, and recovery/upgrade gates.
 
 The Runner packages the unmodified official AJiaSu Linux CLI for an intended containerized, one-connection isolation boundary. This Phase 1 image is a foundation for that boundary, not a claim that later orchestration or production isolation is already complete. The image starts as the non-root user `65532:65532`, uses a locked base-image digest, and verifies the official AJiaSu archive checksum and byte size before installation. Initial image support is limited to `linux/amd64` and `linux/arm64`.
 
@@ -13,6 +13,12 @@ The Runner packages the unmodified official AJiaSu Linux CLI for an intended con
 - Never store AJiaSu credentials in repository files, Compose files, command history, or CI logs.
 
 See the [Runner security-boundary ADR](docs/adr/0001-runner-security-boundary.md) and [Runner image operations guide](docs/operations/runner-image.md) for the enforced runtime and maintenance procedures.
+
+## Docker Compose package
+
+Read the [Phase 7 Compose operations guide](docs/operations/docker-compose-phase7.md) before installation. Initialize with `scripts/compose-init.ps1`, start with `scripts/compose-up.ps1`, inspect bounded state with `scripts/compose-status.ps1`, and stop with `scripts/compose-down.ps1`. Backup, restore, upgrade, and rollback commands are documented in the same guide.
+
+Agent is the only service with Docker socket access; that access is equivalent to Docker-host authority. Phase 7 supports exactly one active Gateway when exact aggregate limits are required. Real-account operation still requires the [AJiaSu usage gate](docs/compliance/ajiasu-usage-gate.md).
 
 ## Build the locked Runner image
 
@@ -62,6 +68,9 @@ Use that same `pwsh` command from PowerShell 7 on Windows or Linux. It runs the 
 - [Runner security-boundary ADR](docs/adr/0001-runner-security-boundary.md)
 - [AJiaSu usage gate](docs/compliance/ajiasu-usage-gate.md)
 - [Runner image operations guide](docs/operations/runner-image.md)
+- [Phase 7 Docker Compose operations guide](docs/operations/docker-compose-phase7.md)
+- [Compose lifecycle details](docs/operations/compose-lifecycle.md)
+- [Compose recovery and upgrade details](docs/operations/compose-recovery-upgrade.md)
 
 ## License
 

@@ -98,15 +98,23 @@ func TestPhase7SBOMInputsCoverReleaseImages(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if len(document.TestImages) != 1 || document.TestImages[0].ProductionAllowed {
+	if len(document.TestImages) != 2 {
 		t.Fatalf("fake image production contract=%#v", document.TestImages)
+	}
+	for _, image := range document.TestImages {
+		if image.ProductionAllowed || image.Name == "" {
+			t.Fatalf("fake image production contract=%#v", image)
+		}
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(image.Dockerfile))); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
 func TestPhase7ImageCIGeneratesSBOMAndProvenance(t *testing.T) {
 	root := phase7RepositoryRoot(t)
 	content := string(readPhase7File(t, filepath.Join(root, "scripts", "compose-image-ci.ps1")))
-	for _, required := range []string{"linux/amd64,linux/arm64", "type=sbom", "type=provenance,mode=max", "--pull=false", "Dockerfile.gateway", "Dockerfile.agent", "ALPINE_IMAGE=", "Dockerfile.fake-runner", "trivy image", "--scanners vuln,secret", "docker history --no-trunc"} {
+	for _, required := range []string{"linux/amd64,linux/arm64", "type=sbom", "type=provenance,mode=max", "--pull=false", "Dockerfile.gateway", "Dockerfile.agent", "ALPINE_IMAGE=", "Dockerfile.fake-runner", "Dockerfile.fake-target", "trivy image", "--scanners vuln,secret", "docker history --no-trunc"} {
 		if !strings.Contains(content, required) {
 			t.Errorf("compose image CI is missing %q", required)
 		}

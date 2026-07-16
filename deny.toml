@@ -4,11 +4,12 @@ yanked = "deny"
 
 [licenses]
 version = 2
-allow = ["Apache-2.0", "MIT", "Unicode-3.0", "BSD-3-Clause", "ISC"]
+allow = ["Apache-2.0", "MIT", "Unicode-3.0", "BSD-3-Clause", "ISC", "Zlib"]
 
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

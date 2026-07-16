@@ -9,6 +9,7 @@
     {"name": "runner", "dockerfile": "Dockerfile", "binary": "/usr/local/bin/ajiasu"}
   ],
   "test_images": [
-    {"name": "fake-runner", "dockerfile": "tests/e2e/Dockerfile.fake-runner", "production_allowed": false}
+    {"name": "fake-runner", "dockerfile": "tests/e2e/Dockerfile.fake-runner", "production_allowed": false},
+    {"name": "fake-target", "dockerfile": "tests/compose/Dockerfile.fake-target", "production_allowed": false}
   ]
 }
