@@ -66,6 +66,8 @@
       "/run/secrets/ajiasu/route-signing-key",
       "/run/secrets/ajiasu/gateway-private-key",
       "/run/secrets/ajiasu/agent-relay-private-key",
+      "/run/secrets/ajiasu/control-plane-private-key",
+      "/run/secrets/ajiasu/agent-private-key",
       "/run/secrets/ajiasu/agent-enrollment-token",
       "/run/secrets/ajiasu/gateway-enrollment-token"
     ],

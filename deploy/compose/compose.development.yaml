@@ -1,0 +1,41 @@
+services:
+  identity-provider:
+    image: ${AJIASU_KEYCLOAK_IMAGE:?immutable Keycloak image is required}
+    profiles: [identity]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    entrypoint: [/bin/bash, -ec]
+    command:
+      - |
+        export KC_BOOTSTRAP_ADMIN_PASSWORD="$$(cat /run/secrets/ajiasu/keycloak-bootstrap-password)"
+        exec /opt/keycloak/bin/kc.sh start-dev --http-enabled=true --health-enabled=true
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${AJIASU_KEYCLOAK_ADMIN_USERNAME:-ajiasu-admin}
+    secrets: [keycloak-bootstrap-password]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+      - /opt/keycloak/data:rw,nosuid,nodev,size=256m,mode=0700
+    ports: ["127.0.0.1:${AJIASU_KEYCLOAK_PORT:-8082}:8080"]
+    expose: [9000]
+    networks: [dependencies]
+    healthcheck:
+      test: [CMD-SHELL, "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\r\n\r\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  control-plane:
+    environment:
+      AJIASU_ENVIRONMENT: development
+      AJIASU_SESSION_COOKIE_SECURE: "false"
+    depends_on:
+      identity-provider:
+        condition: service_healthy
+        required: false
+
+networks:
+  dependencies:
+    internal: false

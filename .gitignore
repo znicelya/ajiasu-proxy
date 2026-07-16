@@ -13,3 +13,6 @@ target/
 /bin/
 .idea/
 .vscode/
+deploy/compose/generated/
+deploy/compose/*.local.yaml
+deploy/compose/env/*.local

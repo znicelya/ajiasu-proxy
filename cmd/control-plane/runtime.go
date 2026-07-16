@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -222,11 +224,11 @@ func (r *applicationRuntime) startAgentGRPC(pools *database.Pools) error {
 	}
 	options := []grpc.ServerOption{grpc.MaxRecvMsgSize(r.cfg.AgentGRPC.MaxRecvBytes), grpc.MaxSendMsgSize(r.cfg.AgentGRPC.MaxSendBytes)}
 	if !r.cfg.AgentGRPC.Insecure {
-		cert, err := tls.LoadX509KeyPair(r.cfg.AgentGRPC.CertFile, r.cfg.AgentGRPC.KeyFile)
+		tlsConfig, err := mutualTLSServerConfig(r.cfg.AgentGRPC)
 		if err != nil {
-			return fmt.Errorf("load agent grpc certificate: %w", err)
+			return fmt.Errorf("load agent grpc TLS: %w", err)
 		}
-		options = append(options, grpc.Creds(credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS13})))
+		options = append(options, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}
 	listener, err := net.Listen("tcp", r.cfg.AgentGRPC.Bind)
 	if err != nil {
@@ -267,11 +269,11 @@ func (r *applicationRuntime) startGatewayGRPC(pools *database.Pools) error {
 	}
 	options := []grpc.ServerOption{grpc.MaxRecvMsgSize(r.cfg.GatewayGRPC.MaxRecvBytes), grpc.MaxSendMsgSize(r.cfg.GatewayGRPC.MaxSendBytes)}
 	if !r.cfg.GatewayGRPC.Insecure {
-		cert, err := tls.LoadX509KeyPair(r.cfg.GatewayGRPC.CertFile, r.cfg.GatewayGRPC.KeyFile)
+		tlsConfig, err := mutualTLSServerConfig(r.cfg.GatewayGRPC)
 		if err != nil {
-			return fmt.Errorf("load gateway grpc certificate: %w", err)
+			return fmt.Errorf("load gateway grpc TLS: %w", err)
 		}
-		options = append(options, grpc.Creds(credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAnyClientCert})))
+		options = append(options, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}
 	listener, err := net.Listen("tcp", r.cfg.GatewayGRPC.Bind)
 	if err != nil {
@@ -287,6 +289,25 @@ func (r *applicationRuntime) startGatewayGRPC(pools *database.Pools) error {
 	}()
 	r.logger.Info("gateway_grpc_started", slog.String("bind", r.cfg.GatewayGRPC.Bind), slog.Bool("insecure", r.cfg.GatewayGRPC.Insecure))
 	return nil
+}
+
+func mutualTLSServerConfig(cfg config.AgentGRPC) (*tls.Config, error) {
+	certificate, err := tls.LoadX509KeyPair(cfg.CertFile, cfg.KeyFile)
+	if err != nil {
+		return nil, err
+	}
+	clientCA, err := os.ReadFile(cfg.ClientCAFile)
+	if err != nil {
+		return nil, err
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(clientCA) {
+		return nil, errors.New("client CA contains no certificates")
+	}
+	return &tls.Config{
+		Certificates: []tls.Certificate{certificate}, ClientCAs: pool,
+		ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS13,
+	}, nil
 }
 
 func checkRuntimeDatabase(ctx context.Context, pools *database.Pools) error {

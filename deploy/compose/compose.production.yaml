@@ -1,0 +1,13 @@
+services:
+  migration:
+    restart: "no"
+  control-plane:
+    restart: always
+  agent:
+    restart: always
+  gateway:
+    restart: always
+
+networks:
+  dependencies:
+    internal: false

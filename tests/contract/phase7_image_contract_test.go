@@ -33,7 +33,7 @@ func TestPhase7ComposeImageLock(t *testing.T) {
 func TestPhase7ReleaseDockerfilesAreHardenedAndMultiArch(t *testing.T) {
 	root := phase7RepositoryRoot(t)
 	applicationDockerfiles := map[string][]string{
-		"Dockerfile.control-plane": {"USER 65532:65532", "HEALTHCHECK", "org.opencontainers.image.source", "org.opencontainers.image.revision", "--chmod=0555", `io.ajiasu.docker-socket="forbidden"`},
+		"Dockerfile.control-plane": {"USER 65532:65532", "HEALTHCHECK", "org.opencontainers.image.source", "org.opencontainers.image.revision", "--chmod=0555", "migrations /app/migrations", `io.ajiasu.docker-socket="forbidden"`},
 		"Dockerfile.gateway":       {"FROM --platform=$TARGETPLATFORM ${RUST_BUILD_IMAGE}", "cargo build --locked", "USER 65532:65532", "HEALTHCHECK", "EXPOSE 8080 1080", `io.ajiasu.docker-socket="forbidden"`},
 		"Dockerfile.agent":         {"FROM --platform=$TARGETPLATFORM ${RUST_BUILD_IMAGE}", "cargo build --locked", "USER 65532:65532", "HEALTHCHECK", "EXPOSE 9092", `io.ajiasu.docker-socket="required"`},
 		"Dockerfile":               {"USER 65532:65532", "HEALTHCHECK", "org.opencontainers.image.source", "runner-healthcheck.sh", `io.ajiasu.docker-socket="forbidden"`},
@@ -110,5 +110,35 @@ func TestPhase7ImageCIGeneratesSBOMAndProvenance(t *testing.T) {
 		if !strings.Contains(content, required) {
 			t.Errorf("compose image CI is missing %q", required)
 		}
+	}
+}
+
+func TestPhase7ComposeModelGateIsCommitted(t *testing.T) {
+	root := phase7RepositoryRoot(t)
+	content := string(readPhase7File(t, filepath.Join(root, "scripts", "compose-model.test.ps1")))
+	for _, required := range []string{"'compose', '--env-file'", "Docker socket leaked", "image is mutable", "root filesystem is writable", "publishes a dependency port", "standing Runner or Console"} {
+		if !strings.Contains(content, required) {
+			t.Errorf("Compose model gate is missing %q", required)
+		}
+	}
+}
+
+func TestPhase7ComposeLayoutAndGeneratedStateIgnore(t *testing.T) {
+	root := phase7RepositoryRoot(t)
+	for _, relative := range []string{
+		"deploy/compose/compose.yaml",
+		"deploy/compose/compose.dependencies.yaml",
+		"deploy/compose/compose.development.yaml",
+		"deploy/compose/compose.production.yaml",
+		"deploy/compose/env/compose.env.example",
+	} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(relative))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitignore := string(readPhase7File(t, filepath.Join(root, ".gitignore")))
+	dockerignore := string(readPhase7File(t, filepath.Join(root, ".dockerignore")))
+	if !strings.Contains(gitignore, "deploy/compose/generated/") || !strings.Contains(dockerignore, "deploy/compose/generated") {
+		t.Fatal("generated Compose state is not excluded from Git and image contexts")
 	}
 }

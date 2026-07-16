@@ -84,6 +84,7 @@ type AgentGRPC struct {
 	Insecure     bool
 	CertFile     string
 	KeyFile      string
+	ClientCAFile string
 	MaxRecvBytes int
 	MaxSendBytes int
 }
@@ -341,6 +342,7 @@ func (l loader) loadGRPC(prefix string, environment Environment) (AgentGRPC, err
 	insecureName := prefix + "_INSECURE"
 	certName := prefix + "_CERT_FILE"
 	keyName := prefix + "_KEY_FILE"
+	clientCAName := prefix + "_CLIENT_CA_FILE"
 	bind, err := l.required(bindName)
 	if err != nil {
 		return AgentGRPC{}, err
@@ -376,12 +378,19 @@ func (l loader) loadGRPC(prefix string, environment Environment) (AgentGRPC, err
 	if _, _, err := readRegularFile(certFile, 4<<20); err != nil {
 		return AgentGRPC{}, fieldError(certName, "must identify an accessible regular file")
 	}
+	clientCAFile, err := l.required(clientCAName)
+	if err != nil {
+		return AgentGRPC{}, err
+	}
+	if _, _, err := readRegularFile(clientCAFile, 4<<20); err != nil {
+		return AgentGRPC{}, fieldError(clientCAName, "must identify an accessible regular file")
+	}
 	if _, info, err := readRegularFile(keyFile, 4<<20); err != nil {
 		return AgentGRPC{}, fieldError(keyName, "must identify an accessible regular file")
 	} else if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		return AgentGRPC{}, fieldError(keyName, "must not be accessible by group or other users")
 	}
-	return AgentGRPC{Bind: bind, CertFile: certFile, KeyFile: keyFile, MaxRecvBytes: 4 << 20, MaxSendBytes: 4 << 20}, nil
+	return AgentGRPC{Bind: bind, CertFile: certFile, KeyFile: keyFile, ClientCAFile: clientCAFile, MaxRecvBytes: 4 << 20, MaxSendBytes: 4 << 20}, nil
 }
 
 func (l loader) loadHTTP() (HTTP, error) {

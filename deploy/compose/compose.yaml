@@ -1,0 +1,234 @@
+name: ajiasu
+
+x-security: &application-security
+  read_only: true
+  init: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+  stop_grace_period: 30s
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+
+services:
+  migration:
+    <<: *application-security
+    image: ${AJIASU_CONTROL_PLANE_IMAGE:?immutable control-plane image is required}
+    restart: "no"
+    command: [migrate, up]
+    environment:
+      AJIASU_DATABASE_MIGRATION_DSN_FILE: /run/secrets/ajiasu/database-migration-dsn
+      AJIASU_MIGRATIONS_DIRECTORY: /app/migrations
+      AJIASU_MIGRATION_TIMEOUT: ${AJIASU_MIGRATION_TIMEOUT:-5m}
+    secrets: [database-migration-dsn]
+    networks: [dependencies]
+
+  control-plane:
+    <<: *application-security
+    image: ${AJIASU_CONTROL_PLANE_IMAGE:?immutable control-plane image is required}
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    environment:
+      AJIASU_ENVIRONMENT: ${AJIASU_ENVIRONMENT:-production}
+      AJIASU_ENVIRONMENT_ID: ${AJIASU_ENVIRONMENT_ID:?environment id is required}
+      AJIASU_HTTP_BIND: 0.0.0.0:8080
+      AJIASU_HTTP_READ_HEADER_TIMEOUT: ${AJIASU_HTTP_READ_HEADER_TIMEOUT:-5s}
+      AJIASU_HTTP_READ_TIMEOUT: ${AJIASU_HTTP_READ_TIMEOUT:-30s}
+      AJIASU_HTTP_WRITE_TIMEOUT: ${AJIASU_HTTP_WRITE_TIMEOUT:-30s}
+      AJIASU_HTTP_IDLE_TIMEOUT: ${AJIASU_HTTP_IDLE_TIMEOUT:-2m}
+      AJIASU_HTTP_SHUTDOWN_TIMEOUT: ${AJIASU_HTTP_SHUTDOWN_TIMEOUT:-30s}
+      AJIASU_AGENT_GRPC_BIND: 0.0.0.0:9090
+      AJIASU_AGENT_GRPC_INSECURE: "false"
+      AJIASU_AGENT_GRPC_CERT_FILE: /run/config/ajiasu/control-plane-cert.pem
+      AJIASU_AGENT_GRPC_KEY_FILE: /run/secrets/ajiasu/control-plane-private-key
+      AJIASU_AGENT_GRPC_CLIENT_CA_FILE: /run/config/ajiasu/platform-ca.pem
+      AJIASU_GATEWAY_GRPC_BIND: 0.0.0.0:9091
+      AJIASU_GATEWAY_GRPC_INSECURE: "false"
+      AJIASU_GATEWAY_GRPC_CERT_FILE: /run/config/ajiasu/control-plane-cert.pem
+      AJIASU_GATEWAY_GRPC_KEY_FILE: /run/secrets/ajiasu/control-plane-private-key
+      AJIASU_GATEWAY_GRPC_CLIENT_CA_FILE: /run/config/ajiasu/platform-ca.pem
+      AJIASU_DATABASE_NORMAL_DSN_FILE: /run/secrets/ajiasu/database-normal-dsn
+      AJIASU_DATABASE_NORMAL_MAX_OPEN: ${AJIASU_DATABASE_NORMAL_MAX_OPEN:-20}
+      AJIASU_DATABASE_NORMAL_MIN_IDLE: ${AJIASU_DATABASE_NORMAL_MIN_IDLE:-2}
+      AJIASU_DATABASE_PLATFORM_DSN_FILE: /run/secrets/ajiasu/database-platform-dsn
+      AJIASU_DATABASE_PLATFORM_MAX_OPEN: ${AJIASU_DATABASE_PLATFORM_MAX_OPEN:-20}
+      AJIASU_DATABASE_PLATFORM_MIN_IDLE: ${AJIASU_DATABASE_PLATFORM_MIN_IDLE:-2}
+      AJIASU_REDIS_ADDRESS: ${AJIASU_REDIS_ADDRESS:-redis:6379}
+      AJIASU_REDIS_USERNAME: ${AJIASU_REDIS_USERNAME:-scheduler}
+      AJIASU_REDIS_PASSWORD_FILE: /run/secrets/ajiasu/redis-password
+      AJIASU_REDIS_DATABASE: ${AJIASU_REDIS_DATABASE:-0}
+      AJIASU_REDIS_TLS: ${AJIASU_REDIS_TLS:-false}
+      AJIASU_REDIS_OPERATION_TIMEOUT: ${AJIASU_REDIS_OPERATION_TIMEOUT:-1s}
+      AJIASU_SCHEDULER_LEASE_NAMESPACE: ajiasu:${AJIASU_ENVIRONMENT_ID}:lease:v1
+      AJIASU_SCHEDULER_LEASE_TTL: ${AJIASU_SCHEDULER_LEASE_TTL:-9s}
+      AJIASU_SCHEDULER_LEASE_RENEW_INTERVAL: ${AJIASU_SCHEDULER_LEASE_RENEW_INTERVAL:-2s}
+      AJIASU_OIDC_ISSUER: ${AJIASU_OIDC_ISSUER:?OIDC issuer is required}
+      AJIASU_OIDC_CLIENT_ID: ${AJIASU_OIDC_CLIENT_ID:-ajiasu-control-plane}
+      AJIASU_OIDC_CLIENT_SECRET_FILE: /run/secrets/ajiasu/oidc-client-secret
+      AJIASU_OIDC_REDIRECT_URL: ${AJIASU_OIDC_REDIRECT_URL:?OIDC redirect URL is required}
+      AJIASU_SESSION_COOKIE_NAME: ${AJIASU_SESSION_COOKIE_NAME:-ajiasu_session}
+      AJIASU_SESSION_COOKIE_SECURE: ${AJIASU_SESSION_COOKIE_SECURE:-true}
+      AJIASU_SESSION_IDLE_TIMEOUT: ${AJIASU_SESSION_IDLE_TIMEOUT:-30m}
+      AJIASU_SESSION_ABSOLUTE_TIMEOUT: ${AJIASU_SESSION_ABSOLUTE_TIMEOUT:-12h}
+      AJIASU_KEYRING_FILE: /run/secrets/ajiasu/control-plane-keyring
+      AJIASU_ROUTE_SIGNING_KEY_FILE: /run/secrets/ajiasu/route-signing-key
+      AJIASU_LOCAL_AUTH_ENABLED: ${AJIASU_LOCAL_AUTH_ENABLED:-false}
+      AJIASU_LOCAL_AUTH_ALLOWED_CIDRS: ${AJIASU_LOCAL_AUTH_ALLOWED_CIDRS:-127.0.0.0/8,::1/128}
+    configs: [platform-ca, control-plane-cert]
+    secrets:
+      - database-normal-dsn
+      - database-platform-dsn
+      - redis-password
+      - oidc-client-secret
+      - control-plane-keyring
+      - route-signing-key
+      - control-plane-private-key
+    ports:
+      - "127.0.0.1:${AJIASU_MANAGEMENT_PORT:-8081}:8080"
+    expose: [9090, 9091]
+    networks: [control, dependencies]
+    healthcheck:
+      test: [CMD, /usr/local/bin/control-plane, health, ready]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  agent:
+    <<: *application-security
+    image: ${AJIASU_AGENT_IMAGE:?immutable agent image is required}
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    environment:
+      AJIASU_AGENT_NODE_NAME: ${AJIASU_AGENT_NODE_NAME:-agent-${AJIASU_ENVIRONMENT_ID}}
+      AJIASU_AGENT_CONTROL_PLANE_ENDPOINT: https://control-plane:9090
+      AJIASU_AGENT_CA_FILE: /run/config/ajiasu/platform-ca.pem
+      AJIASU_AGENT_CERT_FILE: /run/config/ajiasu/agent-cert.pem
+      AJIASU_AGENT_KEY_FILE: /run/secrets/ajiasu/agent-private-key
+      AJIASU_AGENT_STATE_DIRECTORY: /var/lib/ajiasu-agent
+      AJIASU_AGENT_ENROLLMENT_TOKEN_FILE: /run/secrets/ajiasu/agent-enrollment-token
+      AJIASU_AGENT_RUNNER_IMAGE: ${AJIASU_RUNNER_IMAGE:?immutable runner image is required}
+      AJIASU_AGENT_RUNTIME: docker
+      AJIASU_AGENT_VERSION: ${AJIASU_RELEASE_VERSION:-0.7.0}
+      AJIASU_AGENT_SHUTDOWN_TIMEOUT: ${AJIASU_AGENT_SHUTDOWN_TIMEOUT:-30s}
+      AJIASU_DOCKER_SOCKET: /var/run/docker.sock
+      AJIASU_AGENT_RELAY_BIND: 0.0.0.0:9092
+      AJIASU_AGENT_RELAY_DIRECTORY: /var/lib/ajiasu-agent/relay
+      AJIASU_AGENT_ROUTE_VERIFYING_KEY_FILE: /run/config/ajiasu/route-verifying-key
+      AJIASU_AGENT_RELAY_CERT_FILE: /run/config/ajiasu/agent-relay-cert.pem
+      AJIASU_AGENT_RELAY_KEY_FILE: /run/secrets/ajiasu/agent-relay-private-key
+      AJIASU_AGENT_RELAY_CLIENT_CA_FILE: /run/config/ajiasu/platform-ca.pem
+    configs: [platform-ca, agent-cert, agent-relay-cert, route-verifying-key]
+    secrets: [agent-private-key, agent-relay-private-key, agent-enrollment-token]
+    volumes:
+      - agent-state:/var/lib/ajiasu-agent
+      - "${AJIASU_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:rw"
+    group_add: ["${AJIASU_DOCKER_GID:?Docker socket group id is required}"]
+    expose: [9092]
+    networks: [control]
+    healthcheck:
+      test: [CMD, /usr/local/bin/ajiasu-agent, health, ready]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  gateway:
+    <<: *application-security
+    image: ${AJIASU_GATEWAY_IMAGE:?immutable gateway image is required}
+    depends_on:
+      control-plane:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    environment:
+      AJIASU_GATEWAY_NAME: ${AJIASU_GATEWAY_NAME:-gateway-${AJIASU_ENVIRONMENT_ID}}
+      AJIASU_GATEWAY_HTTP_LISTEN: 0.0.0.0:8080
+      AJIASU_GATEWAY_SOCKS5_LISTEN: 0.0.0.0:1080
+      AJIASU_GATEWAY_CONTROL_PLANE_ENDPOINT: https://control-plane:9091
+      AJIASU_GATEWAY_RELAY_ENDPOINT: https://agent:9092
+      AJIASU_GATEWAY_CERTIFICATE_FINGERPRINT: ${AJIASU_GATEWAY_CERTIFICATE_FINGERPRINT:?gateway certificate fingerprint is required}
+      AJIASU_GATEWAY_CA_FILE: /run/config/ajiasu/platform-ca.pem
+      AJIASU_GATEWAY_CERT_FILE: /run/config/ajiasu/gateway-cert.pem
+      AJIASU_GATEWAY_KEY_FILE: /run/secrets/ajiasu/gateway-private-key
+      AJIASU_GATEWAY_ROUTE_VERIFYING_KEY_FILE: /run/config/ajiasu/route-verifying-key
+      AJIASU_GATEWAY_STATE_DIRECTORY: /var/lib/ajiasu-gateway
+      AJIASU_GATEWAY_ENROLLMENT_TOKEN_FILE: /run/secrets/ajiasu/gateway-enrollment-token
+      AJIASU_GATEWAY_MAX_HEADER_BYTES: ${AJIASU_GATEWAY_MAX_HEADER_BYTES:-32768}
+      AJIASU_GATEWAY_MAX_CONNECTIONS: ${AJIASU_GATEWAY_MAX_CONNECTIONS:-1000}
+      AJIASU_GATEWAY_SHUTDOWN_TIMEOUT: ${AJIASU_GATEWAY_SHUTDOWN_TIMEOUT:-30s}
+    configs: [platform-ca, gateway-cert, route-verifying-key]
+    secrets: [gateway-private-key, gateway-enrollment-token]
+    volumes: [gateway-state:/var/lib/ajiasu-gateway]
+    ports:
+      - "${AJIASU_GATEWAY_BIND:-0.0.0.0}:${AJIASU_GATEWAY_HTTP_PORT:-8080}:8080"
+      - "${AJIASU_GATEWAY_BIND:-0.0.0.0}:${AJIASU_GATEWAY_SOCKS5_PORT:-1080}:1080"
+    networks: [edge, control]
+    healthcheck:
+      test: [CMD, /usr/local/bin/ajiasu-gateway, health, ready]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+networks:
+  edge: {}
+  control:
+    internal: true
+  dependencies:
+    internal: true
+
+volumes:
+  postgres-data: {}
+  agent-state: {}
+  gateway-state: {}
+
+configs:
+  platform-ca:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/platform-ca.pem
+  control-plane-cert:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/control-plane-cert.pem
+  agent-cert:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/agent-cert.pem
+  agent-relay-cert:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/agent-relay-cert.pem
+  gateway-cert:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/gateway-cert.pem
+  route-verifying-key:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/route-verifying-key
+
+secrets:
+  database-normal-dsn:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/database-normal-dsn
+  database-platform-dsn:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/database-platform-dsn
+  database-migration-dsn:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/database-migration-dsn
+  redis-password:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/redis-password
+  redis-acl:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/redis-acl
+  oidc-client-secret:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/oidc-client-secret
+  control-plane-keyring:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/control-plane-keyring
+  route-signing-key:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/route-signing-key
+  control-plane-private-key:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/control-plane-key.pem
+  agent-private-key:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/agent-key.pem
+  agent-relay-private-key:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/agent-relay-key.pem
+  gateway-private-key:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/gateway-key.pem
+  agent-enrollment-token:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/agent-enrollment-token
+  gateway-enrollment-token:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/gateway-enrollment-token
+  postgres-password:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/postgres-password
+  keycloak-bootstrap-password:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/keycloak-bootstrap-password

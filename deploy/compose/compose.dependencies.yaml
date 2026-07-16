@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: ${AJIASU_POSTGRES_IMAGE:?immutable PostgreSQL image is required}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 60s
+    environment:
+      POSTGRES_DB: ${AJIASU_POSTGRES_DATABASE:-ajiasu}
+      POSTGRES_USER: ${AJIASU_POSTGRES_USER:-ajiasu_admin}
+      POSTGRES_PASSWORD_FILE: /run/secrets/ajiasu/postgres-password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    secrets: [postgres-password]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    tmpfs: [/run/postgresql:rw,nosuid,nodev,size=16m,mode=0770]
+    expose: [5432]
+    networks: [dependencies]
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  redis:
+    image: ${AJIASU_REDIS_IMAGE:?immutable Redis image is required}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command: [redis-server, --appendonly, "no", --save, "", --aclfile, /run/secrets/ajiasu/redis-acl]
+    secrets: [redis-acl]
+    tmpfs: [/data:rw,noexec,nosuid,nodev,size=64m,mode=0700]
+    expose: [6379]
+    networks: [dependencies]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  migration:
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}

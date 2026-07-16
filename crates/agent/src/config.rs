@@ -3,6 +3,7 @@ use std::{
     ffi::{OsStr, OsString},
     net::SocketAddr,
     path::PathBuf,
+    sync::Arc,
     time::Duration,
 };
 
@@ -22,6 +23,18 @@ pub struct ServerTlsMaterial {
     pub client_ca_certificate: Vec<u8>,
 }
 
+pub struct ClientTlsMaterial {
+    pub ca_certificate: Vec<u8>,
+    pub certificate: Vec<u8>,
+    pub private_key: SecretBytes,
+}
+
+impl std::fmt::Debug for ClientTlsMaterial {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("ClientTlsMaterial([redacted])")
+    }
+}
+
 impl std::fmt::Debug for ServerTlsMaterial {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("ServerTlsMaterial([redacted])")
@@ -39,6 +52,7 @@ pub struct Config {
     pub node_name: String,
     pub state_directory: PathBuf,
     pub control_plane_endpoint: String,
+    pub control_tls: Option<Arc<ClientTlsMaterial>>,
     pub enrollment: Option<EnrollmentSecret>,
     pub agent_version: String,
     pub architecture: String,
@@ -60,6 +74,8 @@ pub enum ConfigError {
     InvalidStateDirectory,
     #[error("AJIASU_AGENT_CONTROL_PLANE_ENDPOINT is required")]
     MissingControlPlaneEndpoint,
+    #[error("agent control-plane mTLS files are invalid")]
+    InvalidControlTlsFiles,
     #[error("AJIASU_AGENT_RUNTIME must be docker or process")]
     InvalidRuntime,
     #[error("AJIASU_AGENT_RUNNER_IMAGE must be an immutable digest for docker runtime")]
@@ -104,6 +120,29 @@ impl Config {
             lookup_text(&mut lookup, "AJIASU_AGENT_CONTROL_PLANE_ENDPOINT")
                 .filter(|value| !value.is_empty())
                 .ok_or(ConfigError::MissingControlPlaneEndpoint)?;
+        let control_tls = if control_plane_endpoint.starts_with("https://") {
+            let ca = lookup("AJIASU_AGENT_CA_FILE")
+                .map(PathBuf::from)
+                .ok_or(ConfigError::InvalidControlTlsFiles)?;
+            let certificate = lookup("AJIASU_AGENT_CERT_FILE")
+                .map(PathBuf::from)
+                .ok_or(ConfigError::InvalidControlTlsFiles)?;
+            let key = lookup("AJIASU_AGENT_KEY_FILE")
+                .map(PathBuf::from)
+                .ok_or(ConfigError::InvalidControlTlsFiles)?;
+            Some(Arc::new(ClientTlsMaterial {
+                ca_certificate: private_file::read(&ca, 1, 4 * 1024 * 1024)
+                    .map_err(|_| ConfigError::InvalidControlTlsFiles)?,
+                certificate: private_file::read(&certificate, 1, 4 * 1024 * 1024)
+                    .map_err(|_| ConfigError::InvalidControlTlsFiles)?,
+                private_key: SecretBytes::new(
+                    private_file::read(&key, 1, 4 * 1024 * 1024)
+                        .map_err(|_| ConfigError::InvalidControlTlsFiles)?,
+                ),
+            }))
+        } else {
+            None
+        };
         let runtime =
             lookup_text(&mut lookup, "AJIASU_AGENT_RUNTIME").unwrap_or_else(|| "docker".to_owned());
         if runtime != "docker" && runtime != "process" {
@@ -173,6 +212,7 @@ impl Config {
             node_name,
             state_directory,
             control_plane_endpoint,
+            control_tls,
             enrollment,
             agent_version: lookup_text(&mut lookup, "AJIASU_AGENT_VERSION")
                 .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_owned()),

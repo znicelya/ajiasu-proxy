@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const phase7Revision1SHA256 = "165a932c00fb84f72896e52d04c1c0a1815c10538ef885f13a2631976d20dc62"
+const phase7Revision1SHA256 = "c4db44e735e62d2faa9e2fff4348140e17ccdf9b175b84a290861925acffad30"
 
 type configurationMatrix struct {
 	Revision        int                   `yaml:"revision"`
@@ -152,10 +152,12 @@ func TestPhase7ConfigurationMatrixGoldenContract(t *testing.T) {
 		"AJIASU_AGENT_GRPC_INSECURE":              "control-plane",
 		"AJIASU_AGENT_GRPC_CERT_FILE":             "control-plane",
 		"AJIASU_AGENT_GRPC_KEY_FILE":              "control-plane",
+		"AJIASU_AGENT_GRPC_CLIENT_CA_FILE":        "control-plane",
 		"AJIASU_GATEWAY_GRPC_BIND":                "control-plane",
 		"AJIASU_GATEWAY_GRPC_INSECURE":            "control-plane",
 		"AJIASU_GATEWAY_GRPC_CERT_FILE":           "control-plane",
 		"AJIASU_GATEWAY_GRPC_KEY_FILE":            "control-plane",
+		"AJIASU_GATEWAY_GRPC_CLIENT_CA_FILE":      "control-plane",
 		"AJIASU_DATABASE_NORMAL_DSN_FILE":         "control-plane",
 		"AJIASU_DATABASE_PLATFORM_DSN_FILE":       "control-plane",
 		"AJIASU_DATABASE_MIGRATION_DSN_FILE":      "lifecycle",
@@ -179,6 +181,9 @@ func TestPhase7ConfigurationMatrixGoldenContract(t *testing.T) {
 		"AJIASU_GATEWAY_SHUTDOWN_TIMEOUT":         "gateway",
 		"AJIASU_GATEWAY_ENROLLMENT_TOKEN_FILE":    "gateway",
 		"AJIASU_AGENT_CONTROL_PLANE_ENDPOINT":     "agent",
+		"AJIASU_AGENT_CA_FILE":                    "agent",
+		"AJIASU_AGENT_CERT_FILE":                  "agent",
+		"AJIASU_AGENT_KEY_FILE":                   "agent",
 		"AJIASU_AGENT_NODE_NAME":                  "agent",
 		"AJIASU_AGENT_STATE_DIRECTORY":            "agent",
 		"AJIASU_AGENT_RELAY_BIND":                 "agent",

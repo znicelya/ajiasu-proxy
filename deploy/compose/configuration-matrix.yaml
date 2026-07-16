@@ -90,10 +90,17 @@ configurations:
   - name: AJIASU_AGENT_GRPC_KEY_FILE
     owner: control-plane
     container_environment: AJIASU_AGENT_GRPC_KEY_FILE
-    secret_mount: null
+    secret_mount: /run/secrets/ajiasu/control-plane-private-key
     default_policy: required_production_file
     modes: [single-host, external-dependencies]
     helm_value: controlPlane.agentGrpc.privateKeyPath
+  - name: AJIASU_AGENT_GRPC_CLIENT_CA_FILE
+    owner: control-plane
+    container_environment: AJIASU_AGENT_GRPC_CLIENT_CA_FILE
+    secret_mount: null
+    default_policy: required_production_file
+    modes: [single-host, external-dependencies]
+    helm_value: controlPlane.agentGrpc.clientCaPath
   - name: AJIASU_GATEWAY_GRPC_BIND
     owner: control-plane
     container_environment: AJIASU_GATEWAY_GRPC_BIND
@@ -118,10 +125,17 @@ configurations:
   - name: AJIASU_GATEWAY_GRPC_KEY_FILE
     owner: control-plane
     container_environment: AJIASU_GATEWAY_GRPC_KEY_FILE
-    secret_mount: null
+    secret_mount: /run/secrets/ajiasu/control-plane-private-key
     default_policy: required_production_file
     modes: [single-host, external-dependencies]
     helm_value: controlPlane.gatewayGrpc.privateKeyPath
+  - name: AJIASU_GATEWAY_GRPC_CLIENT_CA_FILE
+    owner: control-plane
+    container_environment: AJIASU_GATEWAY_GRPC_CLIENT_CA_FILE
+    secret_mount: null
+    default_policy: required_production_file
+    modes: [single-host, external-dependencies]
+    helm_value: controlPlane.gatewayGrpc.clientCaPath
   - name: AJIASU_DATABASE_NORMAL_DSN_FILE
     owner: control-plane
     container_environment: AJIASU_DATABASE_NORMAL_DSN_FILE
@@ -283,6 +297,27 @@ configurations:
     default_policy: package_default
     modes: [development, single-host, external-dependencies]
     helm_value: agent.controlPlaneEndpoint
+  - name: AJIASU_AGENT_CA_FILE
+    owner: agent
+    container_environment: AJIASU_AGENT_CA_FILE
+    secret_mount: null
+    default_policy: generated_ca_file
+    modes: [single-host, external-dependencies]
+    helm_value: agent.tls.caPath
+  - name: AJIASU_AGENT_CERT_FILE
+    owner: agent
+    container_environment: AJIASU_AGENT_CERT_FILE
+    secret_mount: null
+    default_policy: generated_certificate_file
+    modes: [single-host, external-dependencies]
+    helm_value: agent.tls.certificatePath
+  - name: AJIASU_AGENT_KEY_FILE
+    owner: agent
+    container_environment: AJIASU_AGENT_KEY_FILE
+    secret_mount: /run/secrets/ajiasu/agent-private-key
+    default_policy: generated_secret_file
+    modes: [single-host, external-dependencies]
+    helm_value: agent.tls.privateKeySecretKey
   - name: AJIASU_AGENT_NODE_NAME
     owner: agent
     container_environment: AJIASU_AGENT_NODE_NAME

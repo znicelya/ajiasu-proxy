@@ -15,3 +15,6 @@ target
 *.secret
 *.pem
 *.key
+deploy/compose/generated
+deploy/compose/*.local.yaml
+deploy/compose/env/*.local

@@ -40,6 +40,7 @@ RUN addgroup -S -g 65532 controlplane \
     && chown 65532:65532 /var/empty
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build --chown=0:0 --chmod=0555 /out/control-plane /usr/local/bin/control-plane
+COPY --chown=0:0 migrations /app/migrations
 USER 65532:65532
 WORKDIR /var/empty
 EXPOSE 8080

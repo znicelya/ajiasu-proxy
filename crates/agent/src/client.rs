@@ -10,7 +10,11 @@ use ajiasu_agent_protocol::{
 use thiserror::Error;
 use tokio::sync::{mpsc, watch};
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::{Request, metadata::MetadataValue};
+use tonic::{
+    Request,
+    metadata::MetadataValue,
+    transport::{Certificate, ClientTlsConfig, Endpoint, Identity},
+};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -111,7 +115,7 @@ async fn register(
         .map_err(|_| ClientError::InvalidMetadata)?
         .to_owned();
     let enrollment_path = enrollment.source_path.clone();
-    let mut client = AgentControlClient::connect(config.control_plane_endpoint.clone()).await?;
+    let mut client = connect(config).await?;
     let response = client
         .register_node(RegisterNodeRequest {
             enrollment_token,
@@ -148,7 +152,7 @@ async fn connect_once(
     session_path: &Path,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<(), ClientError> {
-    let mut client = AgentControlClient::connect(config.control_plane_endpoint.clone()).await?;
+    let mut client = connect(config).await?;
     let (tx, rx) = mpsc::channel(64);
     tx.send(AgentMessage {
         body: Some(agent_message::Body::Hello(AgentHello {
@@ -250,6 +254,24 @@ async fn connect_once(
     }
     heartbeat.abort();
     Ok(())
+}
+
+async fn connect(
+    config: &Config,
+) -> Result<AgentControlClient<tonic::transport::Channel>, ClientError> {
+    let mut endpoint = Endpoint::from_shared(config.control_plane_endpoint.clone())
+        .map_err(|_| ClientError::InvalidMetadata)?;
+    if let Some(tls) = &config.control_tls {
+        endpoint = endpoint.tls_config(
+            ClientTlsConfig::new()
+                .ca_certificate(Certificate::from_pem(tls.ca_certificate.clone()))
+                .identity(Identity::from_pem(
+                    tls.certificate.clone(),
+                    tls.private_key.expose(),
+                )),
+        )?;
+    }
+    Ok(AgentControlClient::new(endpoint.connect().await?))
 }
 
 fn load_or_create_instance(directory: &std::path::Path) -> Result<Uuid, session::SessionError> {
