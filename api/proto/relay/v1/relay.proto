@@ -24,6 +24,13 @@ message RelayOpen {
   uint32 target_port = 4;
   string dns_mode = 5;
   bytes request_nonce = 6;
+  string gateway_id = 7;
+  string runner_id = 8;
+  uint64 generation = 9;
+  string assignment_id = 10;
+  uint64 assignment_generation = 11;
+  string assignment_valid_until = 12;
+  string policy_hash = 13;
 }
 
 message RelayData {

@@ -63,6 +63,9 @@
       "/run/secrets/ajiasu/redis-password",
       "/run/secrets/ajiasu/oidc-client-secret",
       "/run/secrets/ajiasu/control-plane-keyring",
+      "/run/secrets/ajiasu/route-signing-key",
+      "/run/secrets/ajiasu/gateway-private-key",
+      "/run/secrets/ajiasu/agent-relay-private-key",
       "/run/secrets/ajiasu/agent-enrollment-token",
       "/run/secrets/ajiasu/gateway-enrollment-token"
     ],

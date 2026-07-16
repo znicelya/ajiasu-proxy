@@ -124,6 +124,7 @@ mod tests {
                 gateway_id: "gateway-a".to_owned(),
                 session_token: "gateway-token-canary".to_owned(),
                 protocol_revision: 1,
+                gateway_instance_id: uuid::Uuid::now_v7().to_string(),
             },
         )
         .unwrap();

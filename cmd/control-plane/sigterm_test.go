@@ -37,6 +37,8 @@ func TestControlPlaneSIGTERMCompletesWithinDeadline(t *testing.T) {
 		"AJIASU_HTTP_SHUTDOWN_TIMEOUT=2s",
 		"AJIASU_AGENT_GRPC_BIND=127.0.0.1:0",
 		"AJIASU_AGENT_GRPC_INSECURE=true",
+		"AJIASU_GATEWAY_GRPC_BIND=127.0.0.1:0",
+		"AJIASU_GATEWAY_GRPC_INSECURE=true",
 		"AJIASU_DATABASE_NORMAL_DSN_FILE="+write("normal-dsn", "postgres://normal:test@127.0.0.1:1/test?sslmode=disable"),
 		"AJIASU_DATABASE_NORMAL_MAX_OPEN=2",
 		"AJIASU_DATABASE_NORMAL_MIN_IDLE=0",
@@ -61,6 +63,7 @@ func TestControlPlaneSIGTERMCompletesWithinDeadline(t *testing.T) {
 		"AJIASU_SESSION_IDLE_TIMEOUT=30m",
 		"AJIASU_SESSION_ABSOLUTE_TIMEOUT=12h",
 		"AJIASU_KEYRING_FILE="+write("keyring", "0123456789abcdef0123456789abcdef"),
+		"AJIASU_ROUTE_SIGNING_KEY_FILE="+write("route-signing-key", "0123456789abcdef0123456789abcdef"),
 		"AJIASU_LOCAL_AUTH_ENABLED=true",
 		"AJIASU_LOCAL_AUTH_ALLOWED_CIDRS=127.0.0.0/8,::1/128",
 	)

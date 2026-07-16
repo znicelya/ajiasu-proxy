@@ -12,6 +12,8 @@ pub mod process;
 pub struct RunnerSpec {
     pub runner_id: Uuid,
     pub operation_id: Uuid,
+    pub tenant_id: Uuid,
+    pub endpoint_id: Uuid,
     pub generation: u64,
     pub labels: BTreeMap<String, String>,
 }

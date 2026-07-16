@@ -111,6 +111,77 @@ func (s *Service) ConsumeEnrollment(ctx context.Context, token, gatewayName, cer
 	return gateway, session, nil
 }
 
+func (s *Service) AuthenticateSession(ctx context.Context, token string, gatewayID, instanceID uuid.UUID, revision uint32) (Gateway, error) {
+	if len(token) < 12 || gatewayID == uuid.Nil || instanceID == uuid.Nil || revision != ProtocolRevision {
+		return Gateway{}, ErrSessionExpired
+	}
+	digest := sha256.Sum256([]byte(token))
+	verifier := hexDigest(digest[:])
+	now := s.now().UTC()
+	tx, err := s.pools.Platform.Begin(ctx)
+	if err != nil {
+		return Gateway{}, ErrSessionExpired
+	}
+	defer tx.Rollback(ctx)
+	var sessionGateway, sessionInstance uuid.UUID
+	var storedVerifier string
+	var storedRevision uint32
+	var generation int64
+	var expires time.Time
+	if err := tx.QueryRow(ctx, `SELECT gateway_id,gateway_instance_id,token_verifier,protocol_revision,session_generation,expires_at FROM gateways.sessions WHERE token_prefix=$1 AND revoked_at IS NULL FOR UPDATE`, token[:12]).Scan(&sessionGateway, &sessionInstance, &storedVerifier, &storedRevision, &generation, &expires); err != nil {
+		return Gateway{}, ErrSessionExpired
+	}
+	if subtle.ConstantTimeCompare([]byte(verifier), []byte(storedVerifier)) != 1 || sessionGateway != gatewayID || sessionInstance != instanceID || storedRevision != revision || !expires.After(now) {
+		return Gateway{}, ErrSessionExpired
+	}
+	var gateway Gateway
+	if err := tx.QueryRow(ctx, `SELECT id,name,certificate_fingerprint,state,connectivity_state,session_generation,version,created_at,updated_at FROM gateways.gateways WHERE id=$1 FOR UPDATE`, gatewayID).Scan(&gateway.ID, &gateway.Name, &gateway.CertificateFingerprint, &gateway.State, &gateway.ConnectivityState, &gateway.SessionGeneration, &gateway.Version, &gateway.CreatedAt, &gateway.UpdatedAt); err != nil {
+		return Gateway{}, ErrSessionExpired
+	}
+	if gateway.State != "active" || gateway.SessionGeneration != generation {
+		return Gateway{}, ErrSessionRevoked
+	}
+	if _, err := tx.Exec(ctx, `UPDATE gateways.sessions SET last_used_at=$1 WHERE gateway_id=$2 AND gateway_instance_id=$3`, now, gatewayID, instanceID); err != nil {
+		return Gateway{}, ErrSessionExpired
+	}
+	if _, err := tx.Exec(ctx, `UPDATE gateways.gateways SET connectivity_state='online',updated_at=$1 WHERE id=$2`, now, gatewayID); err != nil {
+		return Gateway{}, ErrSessionExpired
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Gateway{}, ErrSessionExpired
+	}
+	gateway.ConnectivityState = "online"
+	gateway.UpdatedAt = now
+	return gateway, nil
+}
+
+func (s *Service) RecordHeartbeat(ctx context.Context, gatewayID uuid.UUID, observedAt time.Time) error {
+	if gatewayID == uuid.Nil || observedAt.IsZero() || observedAt.After(s.now().UTC().Add(time.Minute)) {
+		return ErrInvalidArgument
+	}
+	now := s.now().UTC()
+	tx, err := s.pools.Platform.Begin(ctx)
+	if err != nil {
+		return ErrSessionExpired
+	}
+	defer tx.Rollback(ctx)
+	result, err := tx.Exec(ctx, `UPDATE gateways.gateways SET connectivity_state='online',last_heartbeat_at=$1,updated_at=$2 WHERE id=$3 AND state='active'`, observedAt.UTC(), now, gatewayID)
+	if err != nil {
+		return ErrSessionExpired
+	}
+	if rows := result.RowsAffected(); rows != 1 {
+		return ErrSessionRevoked
+	}
+	result, err = tx.Exec(ctx, `UPDATE gateways.sessions SET expires_at=$1,last_used_at=$2 WHERE gateway_id=$3 AND revoked_at IS NULL AND session_generation=(SELECT session_generation FROM gateways.gateways WHERE id=$3)`, now.Add(15*time.Minute), now, gatewayID)
+	if err != nil || result.RowsAffected() != 1 {
+		return ErrSessionExpired
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return ErrSessionExpired
+	}
+	return nil
+}
+
 func randomToken(reader io.Reader) (string, error) {
 	data := make([]byte, 32)
 	if _, err := io.ReadFull(reader, data); err != nil {

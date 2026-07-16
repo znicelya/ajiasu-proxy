@@ -7,6 +7,8 @@ use ipnet::IpNet;
 use thiserror::Error;
 
 pub const MAX_DATA_FRAME: usize = 64 * 1024;
+pub const MAX_METADATA_FRAME: usize = 4 + 1 + 1 + 2 + 2 + 4096;
+const METADATA_MAGIC: &[u8; 4] = b"AJR1";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Metadata {
@@ -14,6 +16,67 @@ pub struct Metadata {
     pub target_host: String,
     pub target_port: u16,
     pub dns_mode: String,
+}
+
+pub fn encode_metadata(metadata: &Metadata) -> Result<Vec<u8>, RelayError> {
+    let protocol = match metadata.protocol.as_str() {
+        "http" => 1,
+        "connect" => 2,
+        "socks5" => 3,
+        _ => return Err(RelayError::InvalidMetadata),
+    };
+    let dns_mode = match metadata.dns_mode.as_str() {
+        "gateway" => 1,
+        "runner" => 2,
+        _ => return Err(RelayError::InvalidMetadata),
+    };
+    let host = metadata.target_host.as_bytes();
+    let host_length = u16::try_from(host.len()).map_err(|_| RelayError::InvalidMetadata)?;
+    if host.is_empty() || host.len() > 4096 || metadata.target_port == 0 {
+        return Err(RelayError::InvalidMetadata);
+    }
+    let mut frame = Vec::with_capacity(10 + host.len());
+    frame.extend_from_slice(METADATA_MAGIC);
+    frame.push(protocol);
+    frame.push(dns_mode);
+    frame.extend_from_slice(&host_length.to_be_bytes());
+    frame.extend_from_slice(&metadata.target_port.to_be_bytes());
+    frame.extend_from_slice(host);
+    Ok(frame)
+}
+
+pub fn decode_metadata(frame: &[u8]) -> Result<Metadata, RelayError> {
+    if frame.len() < 10 || frame.len() > MAX_METADATA_FRAME || &frame[..4] != METADATA_MAGIC {
+        return Err(RelayError::InvalidMetadata);
+    }
+    let protocol = match frame[4] {
+        1 => "http",
+        2 => "connect",
+        3 => "socks5",
+        _ => return Err(RelayError::InvalidMetadata),
+    };
+    let dns_mode = match frame[5] {
+        1 => "gateway",
+        2 => "runner",
+        _ => return Err(RelayError::InvalidMetadata),
+    };
+    let host_length = usize::from(u16::from_be_bytes([frame[6], frame[7]]));
+    if host_length == 0 || frame.len() != 10 + host_length {
+        return Err(RelayError::InvalidMetadata);
+    }
+    let target_port = u16::from_be_bytes([frame[8], frame[9]]);
+    let target_host = std::str::from_utf8(&frame[10..])
+        .map_err(|_| RelayError::InvalidMetadata)?
+        .to_owned();
+    let metadata = Metadata {
+        protocol: protocol.to_owned(),
+        target_host,
+        target_port,
+        dns_mode: dns_mode.to_owned(),
+    };
+    let mut session = RelaySession::default();
+    session.open(metadata.clone())?;
+    Ok(metadata)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -127,6 +190,22 @@ mod tests {
         assert_eq!(
             validate_runner_dns(&answers, &[]),
             Err(RelayError::DnsDenied)
+        );
+    }
+
+    #[test]
+    fn metadata_wire_frame_round_trips_and_rejects_truncation() {
+        let metadata = Metadata {
+            protocol: "connect".into(),
+            target_host: "example.com".into(),
+            target_port: 443,
+            dns_mode: "runner".into(),
+        };
+        let encoded = encode_metadata(&metadata).unwrap();
+        assert_eq!(decode_metadata(&encoded), Ok(metadata));
+        assert_eq!(
+            decode_metadata(&encoded[..encoded.len() - 1]),
+            Err(RelayError::InvalidMetadata)
         );
     }
 }

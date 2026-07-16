@@ -129,6 +129,8 @@ ALTER TABLE scheduler.migration_attempts FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY endpoint_assignments_app_select ON scheduler.endpoint_assignments FOR SELECT TO ajiasu_app
   USING (tenant_id = platform.current_tenant_id());
+CREATE POLICY endpoint_assignments_app_insert ON scheduler.endpoint_assignments FOR INSERT TO ajiasu_app
+  WITH CHECK (tenant_id = platform.current_tenant_id());
 CREATE POLICY endpoint_assignments_platform_all ON scheduler.endpoint_assignments FOR ALL TO ajiasu_platform USING (true) WITH CHECK (true);
 CREATE POLICY health_observations_app_select ON scheduler.health_observations FOR SELECT TO ajiasu_app
   USING (tenant_id = platform.current_tenant_id());
@@ -139,7 +141,8 @@ CREATE POLICY migration_attempts_app_select ON scheduler.migration_attempts FOR 
 CREATE POLICY migration_attempts_platform_all ON scheduler.migration_attempts FOR ALL TO ajiasu_platform USING (true) WITH CHECK (true);
 
 REVOKE ALL ON scheduler.endpoint_assignments, scheduler.health_observations, scheduler.pool_cursors, scheduler.migration_attempts FROM PUBLIC;
-GRANT SELECT ON scheduler.endpoint_assignments, scheduler.health_observations, scheduler.migration_attempts TO ajiasu_app;
+GRANT SELECT, INSERT ON scheduler.endpoint_assignments TO ajiasu_app;
+GRANT SELECT ON scheduler.health_observations, scheduler.migration_attempts TO ajiasu_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON scheduler.endpoint_assignments, scheduler.health_observations, scheduler.pool_cursors, scheduler.migration_attempts TO ajiasu_platform;
 
 -- +goose Down
@@ -149,6 +152,7 @@ DROP POLICY pool_cursors_platform_all ON scheduler.pool_cursors;
 DROP POLICY health_observations_platform_all ON scheduler.health_observations;
 DROP POLICY health_observations_app_select ON scheduler.health_observations;
 DROP POLICY endpoint_assignments_platform_all ON scheduler.endpoint_assignments;
+DROP POLICY endpoint_assignments_app_insert ON scheduler.endpoint_assignments;
 DROP POLICY endpoint_assignments_app_select ON scheduler.endpoint_assignments;
 
 DROP TABLE scheduler.migration_attempts;

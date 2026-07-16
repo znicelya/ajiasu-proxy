@@ -17,6 +17,7 @@ use bollard::{
 use uuid::Uuid;
 
 use super::{RunnerRecord, RunnerSpec, RunnerState, Runtime, RuntimeError};
+use crate::relay::RunnerSockets;
 
 const OWNER_LABEL: &str = "ajiasu.owner";
 const OWNER_VALUE: &str = "control-plane";
@@ -25,6 +26,8 @@ pub struct DockerRuntime {
     docker: Docker,
     node_id: Uuid,
     runner_image: String,
+    runner_sockets: RunnerSockets,
+    relay_directory: std::path::PathBuf,
 }
 
 impl DockerRuntime {
@@ -32,6 +35,8 @@ impl DockerRuntime {
         node_id: Uuid,
         runner_image: String,
         socket: &Path,
+        runner_sockets: RunnerSockets,
+        relay_directory: std::path::PathBuf,
     ) -> Result<Self, RuntimeError> {
         if node_id.is_nil() || !runner_image.contains("@sha256:") {
             return Err(RuntimeError::Conflict);
@@ -43,6 +48,8 @@ impl DockerRuntime {
             docker,
             node_id,
             runner_image,
+            runner_sockets,
+            relay_directory,
         })
     }
     async fn owned_containers(
@@ -81,6 +88,14 @@ impl Runtime for DockerRuntime {
                 .get("ajiasu.operation_id")
                 .and_then(|v| Uuid::parse_str(v).ok())
                 .ok_or(RuntimeError::Conflict)?;
+            let tenant_id = labels
+                .get("ajiasu.tenant_id")
+                .and_then(|v| Uuid::parse_str(v).ok())
+                .ok_or(RuntimeError::Conflict)?;
+            let endpoint_id = labels
+                .get("ajiasu.endpoint_id")
+                .and_then(|v| Uuid::parse_str(v).ok())
+                .ok_or(RuntimeError::Conflict)?;
             let generation = labels
                 .get("ajiasu.generation")
                 .and_then(|v| v.parse().ok())
@@ -89,6 +104,8 @@ impl Runtime for DockerRuntime {
                 spec: RunnerSpec {
                     runner_id,
                     operation_id,
+                    tenant_id,
+                    endpoint_id,
                     generation,
                     labels: labels.into_iter().collect::<BTreeMap<_, _>>(),
                 },
@@ -127,6 +144,11 @@ impl Runtime for DockerRuntime {
         labels.insert(OWNER_LABEL.to_owned(), OWNER_VALUE.to_owned());
         labels.insert("ajiasu.node_id".to_owned(), self.node_id.to_string());
         labels.insert("ajiasu.runner_id".to_owned(), spec.runner_id.to_string());
+        labels.insert("ajiasu.tenant_id".to_owned(), spec.tenant_id.to_string());
+        labels.insert(
+            "ajiasu.endpoint_id".to_owned(),
+            spec.endpoint_id.to_string(),
+        );
         labels.insert(
             "ajiasu.operation_id".to_owned(),
             spec.operation_id.to_string(),
@@ -137,16 +159,19 @@ impl Runtime for DockerRuntime {
             "/run/ajiasu".to_owned(),
             "rw,noexec,nosuid,nodev,mode=0700,size=1048576".to_owned(),
         );
-        tmpfs.insert(
-            "/run/ajiasu-relay".to_owned(),
-            "rw,noexec,nosuid,nodev,mode=0700,size=1048576".to_owned(),
-        );
+        let relay_directory =
+            self.relay_directory
+                .join(format!("{}-{}", spec.runner_id.simple(), spec.generation));
+        std::fs::create_dir_all(&relay_directory).map_err(|_| RuntimeError::Unavailable)?;
+        let runner_socket = relay_directory.join("runner.sock");
+        let bind = format!("{}:/run/ajiasu-relay:rw", relay_directory.to_string_lossy());
         let host_config = HostConfig {
             network_mode: Some("none".to_owned()),
             readonly_rootfs: Some(true),
             cap_drop: Some(vec!["ALL".to_owned()]),
             security_opt: Some(vec!["no-new-privileges:true".to_owned()]),
             tmpfs: Some(tmpfs),
+            binds: Some(vec![bind]),
             memory: Some(256 * 1024 * 1024),
             nano_cpus: Some(1_000_000_000),
             ..Default::default()
@@ -157,6 +182,9 @@ impl Runtime for DockerRuntime {
             entrypoint: Some(vec!["/bin/sh".to_owned()]),
             cmd: Some(vec!["-c".to_owned(), "sleep 2147483647".to_owned()]),
             labels: Some(labels),
+            env: Some(vec![
+                "AJIASU_RUNNER_RELAY_SOCKET=/run/ajiasu-relay/runner.sock".to_owned(),
+            ]),
             host_config: Some(host_config),
             ..Default::default()
         };
@@ -212,6 +240,15 @@ impl Runtime for DockerRuntime {
             )
             .await
             .map_err(|_| RuntimeError::Unavailable)?;
+        self.runner_sockets
+            .insert(
+                spec.tenant_id,
+                spec.endpoint_id,
+                spec.runner_id,
+                spec.generation,
+                runner_socket,
+            )
+            .map_err(|_| RuntimeError::Unavailable)?;
         Ok(RunnerRecord {
             spec,
             state: RunnerState::Running,
@@ -236,6 +273,13 @@ impl Runtime for DockerRuntime {
                 )
                 .await
                 .map_err(|_| RuntimeError::Unavailable)?;
+            self.runner_sockets.remove(runner_id, item.spec.generation);
+            let relay_directory = self.relay_directory.join(format!(
+                "{}-{}",
+                runner_id.simple(),
+                item.spec.generation
+            ));
+            let _ = std::fs::remove_dir_all(relay_directory);
         }
         Ok(())
     }

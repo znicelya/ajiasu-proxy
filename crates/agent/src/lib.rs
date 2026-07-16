@@ -7,6 +7,7 @@ pub mod config;
 pub mod inventory;
 pub mod private_file;
 pub mod relay;
+pub mod relay_server;
 pub mod route_grant;
 pub mod runtime;
 pub mod secret;

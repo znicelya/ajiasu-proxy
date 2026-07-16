@@ -17,6 +17,7 @@ import (
 	"github.com/dnomd343/ajiasu-proxy/internal/accounts"
 	"github.com/dnomd343/ajiasu-proxy/internal/audit"
 	"github.com/dnomd343/ajiasu-proxy/internal/endpoints"
+	"github.com/dnomd343/ajiasu-proxy/internal/gateways"
 	"github.com/dnomd343/ajiasu-proxy/internal/identity"
 	"github.com/dnomd343/ajiasu-proxy/internal/nodes"
 	"github.com/dnomd343/ajiasu-proxy/internal/operations"
@@ -68,6 +69,8 @@ type applicationRuntime struct {
 	agentGRPC         *grpc.Server
 	agentListener     net.Listener
 	agentWorkerCancel context.CancelFunc
+	gatewayGRPC       *grpc.Server
+	gatewayListener   net.Listener
 }
 
 type applicationBuilder func(config.Config, *slog.Logger, *database.Pools, httpserver.Readiness) (http.Handler, error)
@@ -108,6 +111,15 @@ func (r *applicationRuntime) Check(ctx context.Context) error {
 		r.pools = nil
 		return err
 	}
+	if err := r.startGatewayGRPC(pools); err != nil {
+		r.stopGRPCServers()
+		if closer, ok := handler.(interface{ Close() error }); ok {
+			_ = closer.Close()
+		}
+		pools.Close()
+		r.pools = nil
+		return err
+	}
 	r.handler = handler
 	r.install(handler)
 	r.logger.Info("control_plane_dependencies_ready", slog.Int64("schema_version", supportedSchemaVersion))
@@ -140,16 +152,28 @@ func (r *applicationRuntime) Close() {
 			_ = closer.Close()
 		}
 		r.handler = nil
-		if r.agentGRPC != nil {
-			r.agentGRPC.GracefulStop()
-			r.agentGRPC = nil
-		}
-		if r.agentListener != nil {
-			_ = r.agentListener.Close()
-			r.agentListener = nil
-		}
+		r.stopGRPCServers()
 		r.pools.Close()
 		r.pools = nil
+	}
+}
+
+func (r *applicationRuntime) stopGRPCServers() {
+	if r.agentGRPC != nil {
+		r.agentGRPC.GracefulStop()
+		r.agentGRPC = nil
+	}
+	if r.agentListener != nil {
+		_ = r.agentListener.Close()
+		r.agentListener = nil
+	}
+	if r.gatewayGRPC != nil {
+		r.gatewayGRPC.GracefulStop()
+		r.gatewayGRPC = nil
+	}
+	if r.gatewayListener != nil {
+		_ = r.gatewayListener.Close()
+		r.gatewayListener = nil
 	}
 }
 
@@ -220,6 +244,48 @@ func (r *applicationRuntime) startAgentGRPC(pools *database.Pools) error {
 		}
 	}()
 	r.logger.Info("agent_grpc_started", slog.String("bind", r.cfg.AgentGRPC.Bind), slog.Bool("insecure", r.cfg.AgentGRPC.Insecure))
+	return nil
+}
+
+func (r *applicationRuntime) startGatewayGRPC(pools *database.Pools) error {
+	if r.cfg.GatewayGRPC.Bind == "" {
+		return nil
+	}
+	service, err := gateways.NewService(pools)
+	if err != nil {
+		return err
+	}
+	seed := r.cfg.RouteSigningKey.Bytes()
+	snapshots, err := gateways.NewDatabaseSnapshotProvider(pools, seed)
+	clear(seed)
+	if err != nil {
+		return err
+	}
+	control, err := gateways.NewGRPCServer(service, nil, snapshots.Snapshot)
+	if err != nil {
+		return err
+	}
+	options := []grpc.ServerOption{grpc.MaxRecvMsgSize(r.cfg.GatewayGRPC.MaxRecvBytes), grpc.MaxSendMsgSize(r.cfg.GatewayGRPC.MaxSendBytes)}
+	if !r.cfg.GatewayGRPC.Insecure {
+		cert, err := tls.LoadX509KeyPair(r.cfg.GatewayGRPC.CertFile, r.cfg.GatewayGRPC.KeyFile)
+		if err != nil {
+			return fmt.Errorf("load gateway grpc certificate: %w", err)
+		}
+		options = append(options, grpc.Creds(credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAnyClientCert})))
+	}
+	listener, err := net.Listen("tcp", r.cfg.GatewayGRPC.Bind)
+	if err != nil {
+		return fmt.Errorf("listen gateway grpc: %w", err)
+	}
+	server := grpc.NewServer(options...)
+	gateways.RegisterGatewayControlServer(server, control)
+	r.gatewayListener, r.gatewayGRPC = listener, server
+	go func() {
+		if err := server.Serve(listener); err != nil && r.gatewayGRPC == server {
+			r.logger.Error("gateway_grpc_failed", slog.String("error", err.Error()))
+		}
+	}()
+	r.logger.Info("gateway_grpc_started", slog.String("bind", r.cfg.GatewayGRPC.Bind), slog.Bool("insecure", r.cfg.GatewayGRPC.Insecure))
 	return nil
 }
 

@@ -37,6 +37,26 @@ pub async fn execute(
             );
         }
     };
+    let tenant_id = match Uuid::parse_str(&command.tenant_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return rejected(
+                &command,
+                CommandAckCode::Rejected,
+                OperationResultCode::Rejected,
+            );
+        }
+    };
+    let endpoint_id = match Uuid::parse_str(&command.endpoint_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return rejected(
+                &command,
+                CommandAckCode::Rejected,
+                OperationResultCode::Rejected,
+            );
+        }
+    };
     let labels: BTreeMap<String, String> = command
         .runtime
         .as_ref()
@@ -45,6 +65,8 @@ pub async fn execute(
     let spec = RunnerSpec {
         runner_id,
         operation_id,
+        tenant_id,
+        endpoint_id,
         generation: command.desired_generation,
         labels,
     };

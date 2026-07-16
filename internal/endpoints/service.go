@@ -162,6 +162,9 @@ func (s *Service) Create(ctx context.Context, actor tenancy.TenantActor, cmd Cre
 		if _, err := tx.Exec(ctx, `INSERT INTO endpoints.endpoint_status (tenant_id,endpoint_id,observed_state,runner_id,reason_code,last_transition_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6)`, actor.TenantID(), endpointID, statusState, statusRunner, reason, now); err != nil {
 			return result{}, mapError(err)
 		}
+		if _, err := tx.Exec(ctx, `INSERT INTO scheduler.endpoint_assignments (tenant_id,endpoint_id,assignment_id,desired_generation,state,created_at,updated_at) VALUES ($1,$2,$3,1,'unassigned',$4,$4)`, actor.TenantID(), endpointID, assignmentID, now); err != nil {
+			return result{}, mapError(err)
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO operations.operations (id,tenant_id,operation_type,resource_type,resource_id,requested_generation,state,progress_category,requested_by,created_at,updated_at,completed_at) VALUES ($1,$2,'endpoint.create','endpoint',$3,1,$4,$5,$6,$7::timestamptz,$7::timestamptz,CASE WHEN $4='succeeded' THEN $7::timestamptz ELSE NULL END)`, operationID, actor.TenantID(), endpointID, operationState, progress, actor.ActorID(), now); err != nil {
 			return result{}, mapError(err)
 		}

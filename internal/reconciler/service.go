@@ -81,7 +81,7 @@ func (s *Service) ApplyObservation(ctx context.Context, o Observation) error {
 			return struct{}{}, mapError(err)
 		}
 		if o.State == RunnerRunning {
-			if _, err := tx.Exec(ctx, `UPDATE scheduler.endpoint_assignments SET state='assigned',health_state='healthy',runner_id=$1,valid_until=$2,last_reason_code='runner_running',updated_at=$3 WHERE tenant_id=$4 AND endpoint_id=$5 AND desired_generation=$6 AND node_id=$7`, o.RunnerID, now.Add(5*time.Minute), now, tenantID, endpointID, o.Generation, o.NodeID); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE scheduler.endpoint_assignments SET state='assigned',health_state='healthy',account_id=COALESCE(account_id,(SELECT account_id FROM endpoints.proxy_endpoints WHERE tenant_id=$4 AND id=$5)),node_id=$7,runner_id=$1,valid_until=$2,last_reason_code='runner_running',updated_at=$3 WHERE tenant_id=$4 AND endpoint_id=$5 AND desired_generation=$6 AND (node_id=$7 OR node_id IS NULL)`, o.RunnerID, now.Add(5*time.Minute), now, tenantID, endpointID, o.Generation, o.NodeID); err != nil {
 				return struct{}{}, mapError(err)
 			}
 		}

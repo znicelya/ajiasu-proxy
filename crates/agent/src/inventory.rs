@@ -12,18 +12,8 @@ pub fn message(node_id: &str, records: &[RunnerRecord]) -> AgentMessage {
                     .iter()
                     .map(|record| RunnerObservation {
                         node_id: node_id.to_owned(),
-                        tenant_id: record
-                            .spec
-                            .labels
-                            .get("tenant_id")
-                            .cloned()
-                            .unwrap_or_default(),
-                        endpoint_id: record
-                            .spec
-                            .labels
-                            .get("endpoint_id")
-                            .cloned()
-                            .unwrap_or_default(),
+                        tenant_id: record.spec.tenant_id.to_string(),
+                        endpoint_id: record.spec.endpoint_id.to_string(),
                         runner_id: record.spec.runner_id.to_string(),
                         operation_id: record.spec.operation_id.to_string(),
                         observed_generation: record.spec.generation,

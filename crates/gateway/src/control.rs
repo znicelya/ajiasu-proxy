@@ -87,6 +87,8 @@ mod tests {
             valid_until: expiry,
             grant: Grant {
                 gateway_id: Uuid::from_u128(7),
+                tenant_id: Uuid::from_u128(1),
+                endpoint_id: Uuid::from_u128(2),
                 runner_id,
                 generation,
                 policy_hash: "hash".into(),

@@ -6,14 +6,20 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+ajiasu-gateway-protocol = { path = "../gateway-protocol" }
 ajiasu-proxy-policy = { path = "../proxy-policy" }
 ajiasu-proxy-protocol = { path = "../proxy-protocol" }
 argon2.workspace = true
 async-trait.workspace = true
+ed25519-dalek.workspace = true
+prost.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+time.workspace = true
 tokio.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true

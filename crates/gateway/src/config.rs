@@ -1,5 +1,6 @@
-use std::{env, ffi::OsString, net::SocketAddr, path::PathBuf, time::Duration};
+use std::{env, ffi::OsString, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
+use ed25519_dalek::VerifyingKey;
 use thiserror::Error;
 
 use crate::{private_file, secret::SecretBytes};
@@ -7,6 +8,18 @@ use crate::{private_file, secret::SecretBytes};
 pub struct EnrollmentSecret {
     pub value: SecretBytes,
     pub source_path: Option<PathBuf>,
+}
+
+pub struct ClientTlsMaterial {
+    pub ca_certificate: Vec<u8>,
+    pub certificate: Vec<u8>,
+    pub private_key: SecretBytes,
+}
+
+impl std::fmt::Debug for ClientTlsMaterial {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("ClientTlsMaterial([redacted])")
+    }
 }
 
 impl std::fmt::Debug for EnrollmentSecret {
@@ -21,6 +34,10 @@ pub struct GatewayConfig {
     pub http_listen: SocketAddr,
     pub socks5_listen: SocketAddr,
     pub control_endpoint: String,
+    pub certificate_fingerprint: String,
+    pub relay_endpoint: String,
+    pub route_verifying_key: VerifyingKey,
+    pub client_tls: Option<Arc<ClientTlsMaterial>>,
     pub state_directory: PathBuf,
     pub enrollment: Option<EnrollmentSecret>,
     pub max_header_bytes: usize,
@@ -42,6 +59,14 @@ pub enum ConfigError {
     InvalidListener,
     #[error("AJIASU_GATEWAY_STATE_DIRECTORY must be absolute")]
     InvalidStateDirectory,
+    #[error("AJIASU_GATEWAY_CERTIFICATE_FINGERPRINT is invalid")]
+    InvalidCertificateFingerprint,
+    #[error("AJIASU_GATEWAY_RELAY_ENDPOINT is required")]
+    MissingRelayEndpoint,
+    #[error("AJIASU_GATEWAY_ROUTE_VERIFYING_KEY_FILE is invalid")]
+    InvalidRouteVerifyingKey,
+    #[error("gateway mTLS files are invalid")]
+    InvalidTlsFiles,
     #[error("AJIASU_GATEWAY_ENROLLMENT_TOKEN conflicts with AJIASU_GATEWAY_ENROLLMENT_TOKEN_FILE")]
     EnrollmentConflict,
     #[error("AJIASU_GATEWAY_ENROLLMENT_TOKEN_FILE is invalid")]
@@ -75,6 +100,49 @@ impl GatewayConfig {
         let control_endpoint = text(&mut lookup, "AJIASU_GATEWAY_CONTROL_PLANE_ENDPOINT")
             .filter(|value| !value.is_empty())
             .ok_or(ConfigError::MissingControlEndpoint)?;
+        let certificate_fingerprint = text(&mut lookup, "AJIASU_GATEWAY_CERTIFICATE_FINGERPRINT")
+            .filter(|value| value.len() >= 32 && value.len() <= 256)
+            .ok_or(ConfigError::InvalidCertificateFingerprint)?;
+        let relay_endpoint = text(&mut lookup, "AJIASU_GATEWAY_RELAY_ENDPOINT")
+            .filter(|value| !value.is_empty())
+            .ok_or(ConfigError::MissingRelayEndpoint)?;
+        let verifying_key_path = lookup("AJIASU_GATEWAY_ROUTE_VERIFYING_KEY_FILE")
+            .map(PathBuf::from)
+            .ok_or(ConfigError::InvalidRouteVerifyingKey)?;
+        let verifying_key_bytes = private_file::read(&verifying_key_path, 32, 32)
+            .map_err(|_| ConfigError::InvalidRouteVerifyingKey)?;
+        let route_verifying_key = VerifyingKey::from_bytes(
+            verifying_key_bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| ConfigError::InvalidRouteVerifyingKey)?,
+        )
+        .map_err(|_| ConfigError::InvalidRouteVerifyingKey)?;
+        let tls_required =
+            control_endpoint.starts_with("https://") || relay_endpoint.starts_with("https://");
+        let client_tls = if tls_required {
+            let ca_path = lookup("AJIASU_GATEWAY_CA_FILE")
+                .map(PathBuf::from)
+                .ok_or(ConfigError::InvalidTlsFiles)?;
+            let certificate_path = lookup("AJIASU_GATEWAY_CERT_FILE")
+                .map(PathBuf::from)
+                .ok_or(ConfigError::InvalidTlsFiles)?;
+            let key_path = lookup("AJIASU_GATEWAY_KEY_FILE")
+                .map(PathBuf::from)
+                .ok_or(ConfigError::InvalidTlsFiles)?;
+            Some(Arc::new(ClientTlsMaterial {
+                ca_certificate: private_file::read(&ca_path, 1, 4 * 1024 * 1024)
+                    .map_err(|_| ConfigError::InvalidTlsFiles)?,
+                certificate: private_file::read(&certificate_path, 1, 4 * 1024 * 1024)
+                    .map_err(|_| ConfigError::InvalidTlsFiles)?,
+                private_key: SecretBytes::new(
+                    private_file::read(&key_path, 1, 4 * 1024 * 1024)
+                        .map_err(|_| ConfigError::InvalidTlsFiles)?,
+                ),
+            }))
+        } else {
+            None
+        };
         let state_directory = lookup("AJIASU_GATEWAY_STATE_DIRECTORY")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("/var/lib/ajiasu-gateway"));
@@ -101,6 +169,10 @@ impl GatewayConfig {
             http_listen,
             socks5_listen,
             control_endpoint,
+            certificate_fingerprint,
+            relay_endpoint,
+            route_verifying_key,
+            client_tls,
             state_directory,
             enrollment,
             max_header_bytes,
@@ -188,6 +260,7 @@ fn container_absolute(path: &std::path::Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use ed25519_dalek::SigningKey;
     use std::{collections::HashMap, fs};
 
     use super::*;
@@ -198,6 +271,12 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         let token = root.join("enrollment");
         private_file::atomic_write(&token, b"gateway-token\n").unwrap();
+        let verifying_key = root.join("route-verifying-key");
+        private_file::atomic_write(
+            &verifying_key,
+            &SigningKey::from_bytes(&[7; 32]).verifying_key().to_bytes(),
+        )
+        .unwrap();
         (
             HashMap::from([
                 (
@@ -207,6 +286,20 @@ mod tests {
                 (
                     "AJIASU_GATEWAY_CONTROL_PLANE_ENDPOINT".to_owned(),
                     OsString::from("http://control-plane:9091"),
+                ),
+                (
+                    "AJIASU_GATEWAY_CERTIFICATE_FINGERPRINT".to_owned(),
+                    OsString::from(
+                        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    ),
+                ),
+                (
+                    "AJIASU_GATEWAY_RELAY_ENDPOINT".to_owned(),
+                    OsString::from("http://agent:9092"),
+                ),
+                (
+                    "AJIASU_GATEWAY_ROUTE_VERIFYING_KEY_FILE".to_owned(),
+                    verifying_key.into_os_string(),
                 ),
                 (
                     "AJIASU_GATEWAY_STATE_DIRECTORY".to_owned(),

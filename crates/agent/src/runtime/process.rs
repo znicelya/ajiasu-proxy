@@ -98,6 +98,8 @@ mod tests {
         RunnerSpec {
             runner_id,
             operation_id,
+            tenant_id: Uuid::now_v7(),
+            endpoint_id: Uuid::now_v7(),
             generation,
             labels: BTreeMap::new(),
         }

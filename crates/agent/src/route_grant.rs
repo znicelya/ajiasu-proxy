@@ -32,7 +32,7 @@ pub struct GrantExpectation<'a> {
 }
 
 impl RouteGrant {
-    fn signing_bytes(&self) -> Result<Vec<u8>, GrantError> {
+    pub(crate) fn signing_bytes(&self) -> Result<Vec<u8>, GrantError> {
         let mut protocols = self.protocols.clone();
         protocols.sort();
         let expires = self

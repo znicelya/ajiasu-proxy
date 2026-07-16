@@ -382,6 +382,10 @@ func validEnvironment(t *testing.T) map[string]string {
 	if err := os.WriteFile(keyring, []byte("0123456789abcdef0123456789abcdef"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	routeSigningKey := filepath.Join(dir, "route-signing-key")
+	if err := os.WriteFile(routeSigningKey, bytes.Repeat([]byte{7}, 32), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	clientSecret := filepath.Join(dir, "oidc-secret")
 	if err := os.WriteFile(clientSecret, []byte("oidc-secret"), 0o600); err != nil {
 		t.Fatal(err)
@@ -410,6 +414,8 @@ func validEnvironment(t *testing.T) map[string]string {
 		"AJIASU_HTTP_SHUTDOWN_TIMEOUT":          "7s",
 		"AJIASU_AGENT_GRPC_BIND":                "127.0.0.1:9090",
 		"AJIASU_AGENT_GRPC_INSECURE":            "true",
+		"AJIASU_GATEWAY_GRPC_BIND":              "127.0.0.1:9091",
+		"AJIASU_GATEWAY_GRPC_INSECURE":          "true",
 		"AJIASU_DATABASE_NORMAL_DSN_FILE":       normalDSN,
 		"AJIASU_DATABASE_NORMAL_MAX_OPEN":       "8",
 		"AJIASU_DATABASE_NORMAL_MIN_IDLE":       "4",
@@ -434,6 +440,7 @@ func validEnvironment(t *testing.T) map[string]string {
 		"AJIASU_SESSION_IDLE_TIMEOUT":           "30m",
 		"AJIASU_SESSION_ABSOLUTE_TIMEOUT":       "12h",
 		"AJIASU_KEYRING_FILE":                   keyring,
+		"AJIASU_ROUTE_SIGNING_KEY_FILE":         routeSigningKey,
 		"AJIASU_LOCAL_AUTH_ENABLED":             "true",
 		"AJIASU_LOCAL_AUTH_ALLOWED_CIDRS":       "127.0.0.0/8,::1/128",
 	}

@@ -7,7 +7,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ajiasu_agent::session::{self, SessionState};
+use ajiasu_agent::{
+    private_file,
+    session::{self, SessionState},
+};
+use ed25519_dalek::SigningKey;
 
 #[test]
 fn sigterm_completes_within_shutdown_deadline() {
@@ -21,12 +25,22 @@ fn sigterm_completes_within_shutdown_deadline() {
         },
     )
     .unwrap();
+    let verifying_key = root.join("route-verifying-key");
+    private_file::atomic_write(
+        &verifying_key,
+        &SigningKey::from_bytes(&[7_u8; 32])
+            .verifying_key()
+            .to_bytes(),
+    )
+    .unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_ajiasu-agent"))
         .env("AJIASU_AGENT_NODE_NAME", "sigterm-node")
         .env("AJIASU_AGENT_STATE_DIRECTORY", &root)
         .env("AJIASU_AGENT_CONTROL_PLANE_ENDPOINT", "http://127.0.0.1:1")
         .env("AJIASU_AGENT_RUNTIME", "process")
         .env("AJIASU_AGENT_SHUTDOWN_TIMEOUT", "2s")
+        .env("AJIASU_AGENT_RELAY_BIND", "127.0.0.1:0")
+        .env("AJIASU_AGENT_ROUTE_VERIFYING_KEY_FILE", &verifying_key)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

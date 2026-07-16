@@ -73,6 +73,27 @@ configurations:
     default_policy: package_default
     modes: [development, single-host, external-dependencies]
     helm_value: controlPlane.agentGrpc.bind
+  - name: AJIASU_AGENT_GRPC_INSECURE
+    owner: control-plane
+    container_environment: AJIASU_AGENT_GRPC_INSECURE
+    secret_mount: null
+    default_policy: development_only
+    modes: [development]
+    helm_value: controlPlane.agentGrpc.insecure
+  - name: AJIASU_AGENT_GRPC_CERT_FILE
+    owner: control-plane
+    container_environment: AJIASU_AGENT_GRPC_CERT_FILE
+    secret_mount: null
+    default_policy: required_production_file
+    modes: [single-host, external-dependencies]
+    helm_value: controlPlane.agentGrpc.certificatePath
+  - name: AJIASU_AGENT_GRPC_KEY_FILE
+    owner: control-plane
+    container_environment: AJIASU_AGENT_GRPC_KEY_FILE
+    secret_mount: null
+    default_policy: required_production_file
+    modes: [single-host, external-dependencies]
+    helm_value: controlPlane.agentGrpc.privateKeyPath
   - name: AJIASU_GATEWAY_GRPC_BIND
     owner: control-plane
     container_environment: AJIASU_GATEWAY_GRPC_BIND
@@ -80,6 +101,27 @@ configurations:
     default_policy: package_default
     modes: [development, single-host, external-dependencies]
     helm_value: controlPlane.gatewayGrpc.bind
+  - name: AJIASU_GATEWAY_GRPC_INSECURE
+    owner: control-plane
+    container_environment: AJIASU_GATEWAY_GRPC_INSECURE
+    secret_mount: null
+    default_policy: development_only
+    modes: [development]
+    helm_value: controlPlane.gatewayGrpc.insecure
+  - name: AJIASU_GATEWAY_GRPC_CERT_FILE
+    owner: control-plane
+    container_environment: AJIASU_GATEWAY_GRPC_CERT_FILE
+    secret_mount: null
+    default_policy: required_production_file
+    modes: [single-host, external-dependencies]
+    helm_value: controlPlane.gatewayGrpc.certificatePath
+  - name: AJIASU_GATEWAY_GRPC_KEY_FILE
+    owner: control-plane
+    container_environment: AJIASU_GATEWAY_GRPC_KEY_FILE
+    secret_mount: null
+    default_policy: required_production_file
+    modes: [single-host, external-dependencies]
+    helm_value: controlPlane.gatewayGrpc.privateKeyPath
   - name: AJIASU_DATABASE_NORMAL_DSN_FILE
     owner: control-plane
     container_environment: AJIASU_DATABASE_NORMAL_DSN_FILE
@@ -122,6 +164,13 @@ configurations:
     default_policy: generated_secret_file
     modes: [development, single-host, external-dependencies]
     helm_value: controlPlane.keyring.secretKey
+  - name: AJIASU_ROUTE_SIGNING_KEY_FILE
+    owner: control-plane
+    container_environment: AJIASU_ROUTE_SIGNING_KEY_FILE
+    secret_mount: /run/secrets/ajiasu/route-signing-key
+    default_policy: generated_secret_file
+    modes: [development, single-host, external-dependencies]
+    helm_value: controlPlane.routeSigning.secretKey
   - name: AJIASU_GATEWAY_HTTP_LISTEN
     owner: gateway
     container_environment: AJIASU_GATEWAY_HTTP_LISTEN
@@ -150,6 +199,48 @@ configurations:
     default_policy: package_default
     modes: [development, single-host, external-dependencies]
     helm_value: gateway.controlPlaneEndpoint
+  - name: AJIASU_GATEWAY_RELAY_ENDPOINT
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_RELAY_ENDPOINT
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.relayEndpoint
+  - name: AJIASU_GATEWAY_ROUTE_VERIFYING_KEY_FILE
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_ROUTE_VERIFYING_KEY_FILE
+    secret_mount: null
+    default_policy: generated_public_key_file
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.routeVerifyingKey.path
+  - name: AJIASU_GATEWAY_CERTIFICATE_FINGERPRINT
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_CERTIFICATE_FINGERPRINT
+    secret_mount: null
+    default_policy: derived_from_certificate
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.controlPlaneCertificateFingerprint
+  - name: AJIASU_GATEWAY_CA_FILE
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_CA_FILE
+    secret_mount: null
+    default_policy: generated_ca_file
+    modes: [single-host, external-dependencies]
+    helm_value: gateway.tls.caPath
+  - name: AJIASU_GATEWAY_CERT_FILE
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_CERT_FILE
+    secret_mount: null
+    default_policy: generated_certificate_file
+    modes: [single-host, external-dependencies]
+    helm_value: gateway.tls.certificatePath
+  - name: AJIASU_GATEWAY_KEY_FILE
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_KEY_FILE
+    secret_mount: /run/secrets/ajiasu/gateway-private-key
+    default_policy: generated_secret_file
+    modes: [single-host, external-dependencies]
+    helm_value: gateway.tls.privateKeySecretKey
   - name: AJIASU_GATEWAY_STATE_DIRECTORY
     owner: gateway
     container_environment: AJIASU_GATEWAY_STATE_DIRECTORY
@@ -206,6 +297,48 @@ configurations:
     default_policy: package_default
     modes: [development, single-host, external-dependencies]
     helm_value: agent.state.mountPath
+  - name: AJIASU_AGENT_RELAY_BIND
+    owner: agent
+    container_environment: AJIASU_AGENT_RELAY_BIND
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.relay.bind
+  - name: AJIASU_AGENT_RELAY_CERT_FILE
+    owner: agent
+    container_environment: AJIASU_AGENT_RELAY_CERT_FILE
+    secret_mount: null
+    default_policy: generated_certificate_file
+    modes: [single-host, external-dependencies]
+    helm_value: agent.relay.certificatePath
+  - name: AJIASU_AGENT_RELAY_KEY_FILE
+    owner: agent
+    container_environment: AJIASU_AGENT_RELAY_KEY_FILE
+    secret_mount: /run/secrets/ajiasu/agent-relay-private-key
+    default_policy: generated_secret_file
+    modes: [single-host, external-dependencies]
+    helm_value: agent.relay.privateKeySecretKey
+  - name: AJIASU_AGENT_RELAY_CLIENT_CA_FILE
+    owner: agent
+    container_environment: AJIASU_AGENT_RELAY_CLIENT_CA_FILE
+    secret_mount: null
+    default_policy: generated_ca_file
+    modes: [single-host, external-dependencies]
+    helm_value: agent.relay.clientCaPath
+  - name: AJIASU_AGENT_RELAY_DIRECTORY
+    owner: agent
+    container_environment: AJIASU_AGENT_RELAY_DIRECTORY
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.relay.directory
+  - name: AJIASU_AGENT_ROUTE_VERIFYING_KEY_FILE
+    owner: agent
+    container_environment: AJIASU_AGENT_ROUTE_VERIFYING_KEY_FILE
+    secret_mount: null
+    default_policy: generated_public_key_file
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.routeVerifyingKey.path
   - name: AJIASU_AGENT_ENROLLMENT_TOKEN_FILE
     owner: agent
     container_environment: AJIASU_AGENT_ENROLLMENT_TOKEN_FILE

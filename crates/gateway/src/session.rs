@@ -7,6 +7,7 @@ use crate::private_file;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SessionState {
     pub gateway_id: String,
+    pub gateway_instance_id: String,
     pub session_token: String,
     pub protocol_revision: u32,
 }
@@ -16,6 +17,7 @@ impl std::fmt::Debug for SessionState {
         formatter
             .debug_struct("SessionState")
             .field("gateway_id", &self.gateway_id)
+            .field("gateway_instance_id", &self.gateway_instance_id)
             .field("session_token", &"[redacted]")
             .field("protocol_revision", &self.protocol_revision)
             .finish()
@@ -63,6 +65,7 @@ pub fn retire_enrollment(path: Option<&Path>) -> Result<(), SessionError> {
 
 fn validate(state: &SessionState) -> Result<(), SessionError> {
     if state.gateway_id.trim().is_empty()
+        || state.gateway_instance_id.trim().is_empty()
         || state.session_token.trim().is_empty()
         || state.protocol_revision != 1
     {
@@ -86,6 +89,7 @@ mod tests {
         private_file::atomic_write(&enrollment, b"one-time").unwrap();
         let state = SessionState {
             gateway_id: "gateway-a".to_owned(),
+            gateway_instance_id: uuid::Uuid::now_v7().to_string(),
             session_token: "gateway-session-canary".to_owned(),
             protocol_revision: 1,
         };

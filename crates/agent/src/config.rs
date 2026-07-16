@@ -1,10 +1,12 @@
 use std::{
     env,
     ffi::{OsStr, OsString},
+    net::SocketAddr,
     path::PathBuf,
     time::Duration,
 };
 
+use ed25519_dalek::VerifyingKey;
 use thiserror::Error;
 
 use crate::{private_file, secret::SecretBytes};
@@ -12,6 +14,18 @@ use crate::{private_file, secret::SecretBytes};
 pub struct EnrollmentSecret {
     pub value: SecretBytes,
     pub source_path: Option<PathBuf>,
+}
+
+pub struct ServerTlsMaterial {
+    pub certificate: Vec<u8>,
+    pub private_key: SecretBytes,
+    pub client_ca_certificate: Vec<u8>,
+}
+
+impl std::fmt::Debug for ServerTlsMaterial {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("ServerTlsMaterial([redacted])")
+    }
 }
 
 impl std::fmt::Debug for EnrollmentSecret {
@@ -32,6 +46,10 @@ pub struct Config {
     pub runner_image: Option<String>,
     pub docker_socket: PathBuf,
     pub shutdown_timeout: Duration,
+    pub relay_bind: SocketAddr,
+    pub route_verifying_key: VerifyingKey,
+    pub relay_directory: PathBuf,
+    pub relay_tls: Option<ServerTlsMaterial>,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -54,6 +72,14 @@ pub enum ConfigError {
     InvalidDockerSocket,
     #[error("AJIASU_AGENT_SHUTDOWN_TIMEOUT must be between 1s and 300s")]
     InvalidShutdownTimeout,
+    #[error("AJIASU_AGENT_RELAY_BIND must be a socket address")]
+    InvalidRelayBind,
+    #[error("AJIASU_AGENT_ROUTE_VERIFYING_KEY_FILE is invalid")]
+    InvalidRouteVerifyingKey,
+    #[error("AJIASU_AGENT_RELAY_DIRECTORY must be absolute")]
+    InvalidRelayDirectory,
+    #[error("agent relay mTLS files are invalid")]
+    InvalidRelayTlsFiles,
 }
 
 impl Config {
@@ -98,6 +124,45 @@ impl Config {
             .map(|value| parse_seconds(&value))
             .transpose()?
             .unwrap_or(Duration::from_secs(30));
+        let relay_bind = lookup_text(&mut lookup, "AJIASU_AGENT_RELAY_BIND")
+            .unwrap_or_else(|| "0.0.0.0:9092".to_owned())
+            .parse()
+            .map_err(|_| ConfigError::InvalidRelayBind)?;
+        let verifying_key_path = lookup("AJIASU_AGENT_ROUTE_VERIFYING_KEY_FILE")
+            .map(PathBuf::from)
+            .ok_or(ConfigError::InvalidRouteVerifyingKey)?;
+        let verifying_key_bytes = private_file::read(&verifying_key_path, 32, 32)
+            .map_err(|_| ConfigError::InvalidRouteVerifyingKey)?;
+        let route_verifying_key = VerifyingKey::from_bytes(
+            verifying_key_bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| ConfigError::InvalidRouteVerifyingKey)?,
+        )
+        .map_err(|_| ConfigError::InvalidRouteVerifyingKey)?;
+        let relay_directory = lookup("AJIASU_AGENT_RELAY_DIRECTORY")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| state_directory.join("relay"));
+        if !container_absolute(&relay_directory) {
+            return Err(ConfigError::InvalidRelayDirectory);
+        }
+        let relay_certificate = lookup("AJIASU_AGENT_RELAY_CERT_FILE").map(PathBuf::from);
+        let relay_key = lookup("AJIASU_AGENT_RELAY_KEY_FILE").map(PathBuf::from);
+        let relay_client_ca = lookup("AJIASU_AGENT_RELAY_CLIENT_CA_FILE").map(PathBuf::from);
+        let relay_tls = match (relay_certificate, relay_key, relay_client_ca) {
+            (None, None, None) => None,
+            (Some(certificate), Some(key), Some(client_ca)) => Some(ServerTlsMaterial {
+                certificate: private_file::read(&certificate, 1, 4 * 1024 * 1024)
+                    .map_err(|_| ConfigError::InvalidRelayTlsFiles)?,
+                private_key: SecretBytes::new(
+                    private_file::read(&key, 1, 4 * 1024 * 1024)
+                        .map_err(|_| ConfigError::InvalidRelayTlsFiles)?,
+                ),
+                client_ca_certificate: private_file::read(&client_ca, 1, 4 * 1024 * 1024)
+                    .map_err(|_| ConfigError::InvalidRelayTlsFiles)?,
+            }),
+            _ => return Err(ConfigError::InvalidRelayTlsFiles),
+        };
         let session_exists = state_directory.join("session.json").is_file();
         let enrollment = if session_exists {
             None
@@ -116,6 +181,10 @@ impl Config {
             runner_image,
             docker_socket,
             shutdown_timeout,
+            relay_bind,
+            route_verifying_key,
+            relay_directory,
+            relay_tls,
         })
     }
 }
@@ -196,6 +265,7 @@ impl OsStringExt for OsString {
 
 #[cfg(test)]
 mod tests {
+    use ed25519_dalek::SigningKey;
     use std::{collections::HashMap, fs};
 
     use super::*;
@@ -206,6 +276,14 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         let enrollment = root.join("enrollment-token");
         private_file::atomic_write(&enrollment, b"one-time-token\n").unwrap();
+        let verifying_key = root.join("route-verifying-key");
+        private_file::atomic_write(
+            &verifying_key,
+            &SigningKey::from_bytes(&[7_u8; 32])
+                .verifying_key()
+                .to_bytes(),
+        )
+        .unwrap();
         let values = HashMap::from([
             (
                 "AJIASU_AGENT_NODE_NAME".to_owned(),
@@ -235,6 +313,14 @@ mod tests {
             (
                 "AJIASU_AGENT_SHUTDOWN_TIMEOUT".to_owned(),
                 OsString::from("15s"),
+            ),
+            (
+                "AJIASU_AGENT_RELAY_BIND".to_owned(),
+                OsString::from("127.0.0.1:9092"),
+            ),
+            (
+                "AJIASU_AGENT_ROUTE_VERIFYING_KEY_FILE".to_owned(),
+                verifying_key.into_os_string(),
             ),
         ]);
         (values, root)

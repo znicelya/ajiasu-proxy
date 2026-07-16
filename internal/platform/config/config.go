@@ -26,16 +26,18 @@ const (
 )
 
 type Config struct {
-	Environment Environment
-	Deployment  Deployment
-	HTTP        HTTP
-	AgentGRPC   AgentGRPC
-	Database    Database
-	Redis       Redis
-	OIDC        OIDC
-	Session     Session
-	Keyring     Secret
-	LocalAuth   LocalAuth
+	Environment     Environment
+	Deployment      Deployment
+	HTTP            HTTP
+	AgentGRPC       AgentGRPC
+	GatewayGRPC     AgentGRPC
+	Database        Database
+	Redis           Redis
+	OIDC            OIDC
+	Session         Session
+	Keyring         Secret
+	RouteSigningKey Secret
+	LocalAuth       LocalAuth
 }
 
 type Deployment struct {
@@ -179,6 +181,16 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil {
 		return Config{}, fieldError("AJIASU_KEYRING_FILE", err.Error())
 	}
+	routeSigningKeyFile, err := l.required("AJIASU_ROUTE_SIGNING_KEY_FILE")
+	if err != nil {
+		clear(keyringBytes)
+		return Config{}, err
+	}
+	routeSigningKey, err := readSecret(routeSigningKeyFile, 32, 32)
+	if err != nil {
+		clear(keyringBytes)
+		return Config{}, fieldError("AJIASU_ROUTE_SIGNING_KEY_FILE", err.Error())
+	}
 	localAuth, err := l.loadLocalAuth()
 	if err != nil {
 		return Config{}, err
@@ -187,18 +199,24 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	gatewayGRPC, err := l.loadGatewayGRPC(environment)
+	if err != nil {
+		return Config{}, err
+	}
 
 	return Config{
-		Environment: environment,
-		Deployment:  Deployment{EnvironmentID: environmentID},
-		HTTP:        httpConfig,
-		AgentGRPC:   agentGRPC,
-		Database:    database,
-		Redis:       redisConfig,
-		OIDC:        oidc,
-		Session:     session,
-		Keyring:     newSecret(keyringBytes),
-		LocalAuth:   localAuth,
+		Environment:     environment,
+		Deployment:      Deployment{EnvironmentID: environmentID},
+		HTTP:            httpConfig,
+		AgentGRPC:       agentGRPC,
+		GatewayGRPC:     gatewayGRPC,
+		Database:        database,
+		Redis:           redisConfig,
+		OIDC:            oidc,
+		Session:         session,
+		Keyring:         newSecret(keyringBytes),
+		RouteSigningKey: newSecret(routeSigningKey),
+		LocalAuth:       localAuth,
 	}, nil
 }
 
@@ -215,6 +233,7 @@ func (c Config) LogValue() slog.Value {
 			slog.Duration("shutdown_timeout", c.HTTP.ShutdownTimeout),
 		),
 		slog.Group("agent_grpc", slog.String("bind", c.AgentGRPC.Bind), slog.Bool("insecure", c.AgentGRPC.Insecure), slog.Int("max_recv_bytes", c.AgentGRPC.MaxRecvBytes), slog.Int("max_send_bytes", c.AgentGRPC.MaxSendBytes)),
+		slog.Group("gateway_grpc", slog.String("bind", c.GatewayGRPC.Bind), slog.Bool("insecure", c.GatewayGRPC.Insecure), slog.Int("max_recv_bytes", c.GatewayGRPC.MaxRecvBytes), slog.Int("max_send_bytes", c.GatewayGRPC.MaxSendBytes)),
 		slog.Group("database",
 			slog.String("normal_dsn", "[redacted]"),
 			slog.Int("normal_max_open", c.Database.Normal.MaxOpenConnections),
@@ -239,6 +258,7 @@ func (c Config) LogValue() slog.Value {
 		),
 		slog.String("session", "[redacted]"),
 		slog.String("keyring", "[redacted]"),
+		slog.String("route_signing_key", "[redacted]"),
 		slog.Group("local_auth",
 			slog.Bool("enabled", c.LocalAuth.Enabled),
 			slog.Int("allowed_cidr_count", len(c.LocalAuth.AllowedCIDRs)),
@@ -299,54 +319,67 @@ func (l loader) loadRedis() (Redis, error) {
 
 func (c Config) String() string {
 	return fmt.Sprintf(
-		"Config{environment=%q,http_bind=%q,agent_grpc_bind=%q,database=[redacted],oidc=[redacted],session=[redacted],keyring_file=[redacted],local_auth_enabled=%t}",
+		"Config{environment=%q,http_bind=%q,agent_grpc_bind=%q,gateway_grpc_bind=%q,database=[redacted],oidc=[redacted],session=[redacted],keyring=[redacted],route_signing_key=[redacted],local_auth_enabled=%t}",
 		c.Environment,
 		c.HTTP.Bind,
 		c.AgentGRPC.Bind,
+		c.GatewayGRPC.Bind,
 		c.LocalAuth.Enabled,
 	)
 }
 
 func (l loader) loadAgentGRPC(environment Environment) (AgentGRPC, error) {
-	bind, err := l.required("AJIASU_AGENT_GRPC_BIND")
+	return l.loadGRPC("AJIASU_AGENT_GRPC", environment)
+}
+
+func (l loader) loadGatewayGRPC(environment Environment) (AgentGRPC, error) {
+	return l.loadGRPC("AJIASU_GATEWAY_GRPC", environment)
+}
+
+func (l loader) loadGRPC(prefix string, environment Environment) (AgentGRPC, error) {
+	bindName := prefix + "_BIND"
+	insecureName := prefix + "_INSECURE"
+	certName := prefix + "_CERT_FILE"
+	keyName := prefix + "_KEY_FILE"
+	bind, err := l.required(bindName)
 	if err != nil {
 		return AgentGRPC{}, err
 	}
 	if _, _, err := net.SplitHostPort(bind); err != nil {
-		return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_BIND", "must be host:port")
+		return AgentGRPC{}, fieldError(bindName, "must be host:port")
 	}
-	insecure, err := l.boolean("AJIASU_AGENT_GRPC_INSECURE")
+	insecure, err := l.boolean(insecureName)
 	if err != nil {
 		return AgentGRPC{}, err
 	}
 	if insecure {
 		if environment != EnvironmentDevelopment {
-			return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_INSECURE", "is allowed only in development")
+			return AgentGRPC{}, fieldError(insecureName, "is allowed only in development")
 		}
 		host, _, _ := net.SplitHostPort(bind)
 		if host != "localhost" {
 			address, parseErr := netip.ParseAddr(host)
 			if parseErr != nil || !address.IsLoopback() {
-				return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_BIND", "must be loopback when insecure")
+				return AgentGRPC{}, fieldError(bindName, "must be loopback when insecure")
 			}
 		}
 		return AgentGRPC{Bind: bind, Insecure: true, MaxRecvBytes: 4 << 20, MaxSendBytes: 4 << 20}, nil
 	}
-	certFile, err := l.required("AJIASU_AGENT_GRPC_CERT_FILE")
+	certFile, err := l.required(certName)
 	if err != nil {
 		return AgentGRPC{}, err
 	}
-	keyFile, err := l.required("AJIASU_AGENT_GRPC_KEY_FILE")
+	keyFile, err := l.required(keyName)
 	if err != nil {
 		return AgentGRPC{}, err
 	}
 	if _, _, err := readRegularFile(certFile, 4<<20); err != nil {
-		return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_CERT_FILE", "must identify an accessible regular file")
+		return AgentGRPC{}, fieldError(certName, "must identify an accessible regular file")
 	}
 	if _, info, err := readRegularFile(keyFile, 4<<20); err != nil {
-		return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_KEY_FILE", "must identify an accessible regular file")
+		return AgentGRPC{}, fieldError(keyName, "must identify an accessible regular file")
 	} else if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
-		return AgentGRPC{}, fieldError("AJIASU_AGENT_GRPC_KEY_FILE", "must not be accessible by group or other users")
+		return AgentGRPC{}, fieldError(keyName, "must not be accessible by group or other users")
 	}
 	return AgentGRPC{Bind: bind, CertFile: certFile, KeyFile: keyFile, MaxRecvBytes: 4 << 20, MaxSendBytes: 4 << 20}, nil
 }

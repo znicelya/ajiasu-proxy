@@ -18,6 +18,7 @@ use crate::{
     commands,
     config::Config,
     inventory, private_file,
+    relay::RunnerSockets,
     runtime::{Runtime, docker::DockerRuntime, process::ProcessRuntime},
     session::{self, SessionState},
 };
@@ -43,6 +44,7 @@ pub enum ClientError {
 pub async fn run(
     mut config: Config,
     mut shutdown: watch::Receiver<bool>,
+    runner_sockets: RunnerSockets,
 ) -> Result<(), ClientError> {
     let session_path = config.state_directory.join("session.json");
     let instance_id = load_or_create_instance(&config.state_directory)?;
@@ -60,6 +62,8 @@ pub async fn run(
                     .clone()
                     .ok_or(ClientError::InvalidMetadata)?,
                 &config.docker_socket,
+                runner_sockets,
+                config.relay_directory.clone(),
             )
             .map_err(|_| ClientError::InvalidMetadata)?,
         )
@@ -180,11 +184,8 @@ async fn connect_once(
                     }
                 }
             }
-            let active = heartbeat_runtime
-                .inventory()
-                .await
-                .map(|items| items.len())
-                .unwrap_or_default();
+            let records = heartbeat_runtime.inventory().await.unwrap_or_default();
+            let active = records.len();
             if heartbeat_tx
                 .send(AgentMessage {
                     body: Some(agent_message::Body::Heartbeat(Heartbeat {
@@ -197,6 +198,13 @@ async fn connect_once(
                         maintenance_state: MaintenanceState::Active as i32,
                     })),
                 })
+                .await
+                .is_err()
+            {
+                break;
+            }
+            if heartbeat_tx
+                .send(inventory::message(&heartbeat_node, &records))
                 .await
                 .is_err()
             {
