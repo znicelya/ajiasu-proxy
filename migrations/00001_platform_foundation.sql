@@ -15,6 +15,21 @@ CREATE ROLE ajiasu_platform
     NOREPLICATION
     NOBYPASSRLS;
 
+-- Single-host Compose creates restricted login roles before migrations. Grant
+-- group membership only when those optional login roles are present.
+-- +goose StatementBegin
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ajiasu_normal') THEN
+        GRANT ajiasu_app TO ajiasu_normal;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ajiasu_control') THEN
+        GRANT ajiasu_platform TO ajiasu_control;
+    END IF;
+END
+$$;
+-- +goose StatementEnd
+
 CREATE SCHEMA platform;
 CREATE SCHEMA identity;
 CREATE SCHEMA tenancy;

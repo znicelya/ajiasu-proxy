@@ -11,7 +11,14 @@ services:
       POSTGRES_USER: ${AJIASU_POSTGRES_USER:-ajiasu_admin}
       POSTGRES_PASSWORD_FILE: /run/secrets/ajiasu/postgres-password
       PGDATA: /var/lib/postgresql/data/pgdata
-    secrets: [postgres-password]
+    configs:
+      - source: database-bootstrap
+        target: /docker-entrypoint-initdb.d/010-ajiasu-users.sh
+        mode: 0555
+    secrets:
+      - postgres-password
+      - database-normal-password
+      - database-platform-password
     volumes: [postgres-data:/var/lib/postgresql/data]
     tmpfs: [/run/postgresql:rw,nosuid,nodev,size=16m,mode=0770]
     expose: [5432]
@@ -47,3 +54,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
+
+configs:
+  database-bootstrap:
+    file: ./postgres-init.sh

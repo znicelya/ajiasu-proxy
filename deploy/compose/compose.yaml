@@ -206,6 +206,10 @@ secrets:
     file: ${AJIASU_GENERATED_DIR:-./generated}/database-platform-dsn
   database-migration-dsn:
     file: ${AJIASU_GENERATED_DIR:-./generated}/database-migration-dsn
+  database-normal-password:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/database-normal-password
+  database-platform-password:
+    file: ${AJIASU_GENERATED_DIR:-./generated}/database-platform-password
   redis-password:
     file: ${AJIASU_GENERATED_DIR:-./generated}/redis-password
   redis-acl:

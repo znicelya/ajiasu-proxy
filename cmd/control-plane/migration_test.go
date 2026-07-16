@@ -34,6 +34,28 @@ func TestMigrationUpStatusAndDatabaseRestart(t *testing.T) {
 	}
 }
 
+func TestMigrationGrantsOptionalComposeLoginRoles(t *testing.T) {
+	postgres := testkit.StartPostgres(t)
+	db, err := sql.Open("pgx", postgres.AdminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.ExecContext(t.Context(), `CREATE ROLE ajiasu_normal LOGIN; CREATE ROLE ajiasu_control LOGIN`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := executeMigration(t.Context(), config.Migration{DSN: postgres.AdminDSN, Directory: repositoryMigrationDirectory(t), Timeout: 2 * time.Minute}, "up"); err != nil {
+		t.Fatal(err)
+	}
+	var normalMember, platformMember bool
+	if err := db.QueryRowContext(t.Context(), `SELECT pg_has_role('ajiasu_normal','ajiasu_app','MEMBER'), pg_has_role('ajiasu_control','ajiasu_platform','MEMBER')`).Scan(&normalMember, &platformMember); err != nil {
+		t.Fatal(err)
+	}
+	if !normalMember || !platformMember {
+		t.Fatalf("compose role membership normal=%v platform=%v", normalMember, platformMember)
+	}
+}
+
 func TestMigrationAdvisoryLockHonorsTimeout(t *testing.T) {
 	postgres := testkit.StartPostgres(t)
 	db, err := sql.Open("pgx", postgres.AdminDSN)

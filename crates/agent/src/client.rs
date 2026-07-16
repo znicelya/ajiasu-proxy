@@ -41,8 +41,6 @@ pub enum ClientError {
     ChannelClosed,
     #[error("session metadata is invalid")]
     InvalidMetadata,
-    #[error("enrollment input could not be retired")]
-    EnrollmentCleanup,
 }
 
 pub async fn run(
@@ -135,13 +133,22 @@ async fn register(
         protocol_revision: response.selected_protocol_revision,
     };
     session::save(path, &state)?;
-    if let Some(path) = enrollment_path
-        && let Err(error) = std::fs::remove_file(path)
-        && error.kind() != std::io::ErrorKind::NotFound
-    {
-        return Err(ClientError::EnrollmentCleanup);
+    if let Some(path) = enrollment_path {
+        retire_consumed_enrollment(&path);
     }
     Ok(state)
+}
+
+fn retire_consumed_enrollment(path: &Path) {
+    if let Err(error) = std::fs::remove_file(path) {
+        let immutable_mount = matches!(error.raw_os_error(), Some(16) | Some(30));
+        if error.kind() != std::io::ErrorKind::NotFound
+            && error.kind() != std::io::ErrorKind::PermissionDenied
+            && !immutable_mount
+        {
+            warn!(event = "agent_enrollment_cleanup_deferred");
+        }
+    }
 }
 
 async fn connect_once(

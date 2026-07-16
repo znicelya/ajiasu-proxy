@@ -15,6 +15,12 @@ import (
 )
 
 func main() {
+	if handled, exitCode := runComposeCLI(os.Args[1:], os.LookupEnv, os.Stdout, os.Stderr); handled {
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+		return
+	}
 	if handled, exitCode := runLifecycleCLI(os.Args[1:], os.LookupEnv, os.Stdout, os.Stderr); handled {
 		if exitCode != 0 {
 			os.Exit(exitCode)

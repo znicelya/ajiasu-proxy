@@ -59,6 +59,15 @@ pub fn retire_enrollment(path: Option<&Path>) -> Result<(), SessionError> {
     match std::fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        // Compose secrets are immutable bind mounts. The server has already
+        // consumed the one-time enrollment before session state is persisted,
+        // so EACCES/EBUSY/EROFS still leaves the material unusable.
+        Err(error)
+            if error.kind() == std::io::ErrorKind::PermissionDenied
+                || matches!(error.raw_os_error(), Some(16) | Some(30)) =>
+        {
+            Ok(())
+        }
         Err(_) => Err(SessionError::Unavailable),
     }
 }
