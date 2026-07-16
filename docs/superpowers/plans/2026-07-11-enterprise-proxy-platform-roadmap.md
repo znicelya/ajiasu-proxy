@@ -159,6 +159,10 @@ Files are grouped by responsibility. Go packages remain internal until a cross-p
 
 ## Phase 7: Docker Compose Production Package
 
+**Detailed spec:** `docs/superpowers/specs/2026-07-16-docker-compose-production-package-design.md`
+
+**Detailed plan:** `docs/superpowers/plans/2026-07-16-docker-compose-production-package.md`
+
 **Entry dependency:** Phase 6 provides an end-to-end control/data path.
 
 **Produces:**
