@@ -47,6 +47,7 @@ where
                 directory.is_dir()
             } else {
                 matches!(session::load(&directory.join("session.json")), Ok(Some(_)))
+                    && crate::private_file::read(&directory.join("snapshot.ready"), 5, 5).is_ok()
             };
             if !healthy {
                 let _ = writeln!(stderr, "gateway health check failed");
@@ -128,6 +129,7 @@ mod tests {
             },
         )
         .unwrap();
+        crate::private_file::atomic_write(&root.join("snapshot.ready"), b"ready").unwrap();
         let mut stdout = Vec::new();
         assert_eq!(
             run(

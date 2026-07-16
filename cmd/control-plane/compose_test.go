@@ -13,6 +13,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dnomd343/ajiasu-proxy/internal/platform/config"
+	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
+	"github.com/dnomd343/ajiasu-proxy/internal/testkit"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestComposeMaterializeIsPrivateRandomAndIdempotent(t *testing.T) {
@@ -186,6 +191,37 @@ func TestAtomicPrivateWriteNeverOverwritesAndCleansTemporaryFile(t *testing.T) {
 	entries, _ := os.ReadDir(directory)
 	if len(entries) != 1 || entries[0].Name() != "secret" {
 		t.Fatalf("entries = %#v", entries)
+	}
+}
+
+func TestComposeRuntimeStatusAndDrainOnEmptyMigratedDatabase(t *testing.T) {
+	postgres := testkit.StartPostgres(t)
+	if _, err := executeMigration(t.Context(), config.Migration{DSN: postgres.AdminDSN, Directory: repositoryMigrationDirectory(t), Timeout: 2 * time.Minute}, "up"); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := pgxpool.New(t.Context(), postgres.AdminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	pools := &database.Pools{Platform: pool}
+	status, err := readComposeRuntimeStatus(t.Context(), pools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "token") || status.Nodes.Total != 0 || status.Gateways.Total != 0 {
+		t.Fatalf("status = %s", encoded)
+	}
+	drained, err := drainComposeRuntime(t.Context(), pools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if drained["nodes"] != 0 || drained["assignments"] != 0 {
+		t.Fatalf("drain = %#v", drained)
 	}
 }
 

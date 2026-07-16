@@ -50,6 +50,8 @@ pub async fn run(
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), ClientError> {
     let session_path = config.state_directory.join("session.json");
+    let ready_path = config.state_directory.join("snapshot.ready");
+    let _ = std::fs::remove_file(&ready_path);
     let mut state = match session::load(&session_path)? {
         Some(state) => state,
         None => register(&mut config, &session_path).await?,
@@ -62,6 +64,7 @@ pub async fn run(
             &config,
             &mut state,
             &session_path,
+            &ready_path,
             routes.clone(),
             ready.clone(),
             &mut shutdown,
@@ -120,6 +123,7 @@ async fn connect_once(
     config: &GatewayConfig,
     state: &mut SessionState,
     _session_path: &std::path::Path,
+    ready_path: &std::path::Path,
     routes: RouteTable,
     ready: watch::Sender<bool>,
     shutdown: &mut watch::Receiver<bool>,
@@ -197,6 +201,8 @@ async fn connect_once(
                 {
                     Ok(()) => {
                         needs_snapshot = false;
+                        crate::private_file::atomic_write(ready_path, b"ready")
+                            .map_err(|_| ClientError::InvalidSnapshot)?;
                         let _ = ready.send(true);
                         sender
                             .send(GatewayMessage {
@@ -234,6 +240,7 @@ async fn connect_once(
                     Ok(()) | Err(RouteError::StaleVersion | RouteError::StaleAssignment) => {}
                     Err(RouteError::SnapshotRequired) => {
                         needs_snapshot = true;
+                        let _ = std::fs::remove_file(ready_path);
                         let _ = ready.send(false);
                         sender
                             .send(GatewayMessage {

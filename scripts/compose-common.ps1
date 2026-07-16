@@ -1,5 +1,10 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$script:ComposeStableGeneratedFiles = @(
+    'agent-cert.pem','agent-key.pem','agent-relay-cert.pem','agent-relay-key.pem','control-plane-cert.pem','control-plane-key.pem','control-plane-keyring',
+    'database-migration-dsn','database-normal-dsn','database-normal-password','database-platform-dsn','database-platform-password','gateway-cert.pem','gateway-key.pem',
+    'gateway-certificate-fingerprint','keycloak-bootstrap-password','oidc-client-secret','platform-ca.pem','postgres-password','redis-acl','redis-password','route-signing-key','route-verifying-key'
+)
 
 function Assert-ComposeImmutableImage {
     param([Parameter(Mandatory = $true)][string]$Name, [Parameter(Mandatory = $true)][string]$Value)
@@ -93,5 +98,88 @@ function Invoke-ComposeControlPlaneCLI {
         if ($LASTEXITCODE -ne 0) { throw "Control Plane compose command failed with exit code $LASTEXITCODE" }
     } finally {
         foreach ($entry in $saved.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value) }
+    }
+}
+
+function Wait-ComposeServiceHealthy {
+    param([Parameter(Mandatory = $true)][string[]]$DockerArguments, [Parameter(Mandatory = $true)][string]$Service, [TimeSpan]$Timeout = [TimeSpan]::FromMinutes(5))
+    $deadline = [DateTime]::UtcNow.Add($Timeout)
+    do {
+        $containerId = (& docker @DockerArguments ps -q $Service | Out-String).Trim()
+        if ($LASTEXITCODE -eq 0 -and $containerId) {
+            $state = (& docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $containerId 2>$null | Out-String).Trim()
+            if ($state -eq 'healthy' -or $state -eq 'running') { return }
+            if ($state -eq 'unhealthy' -or $state -eq 'exited' -or $state -eq 'dead') { throw "Service '$Service' entered terminal state '$state'" }
+        }
+        Start-Sleep -Seconds 2
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "Timed out waiting for service '$Service'; diagnostic containers were preserved"
+}
+
+function Get-ComposeRunnerClassification {
+    param([Parameter(Mandatory = $true)][object[]]$Containers, [Parameter(Mandatory = $true)][Guid]$NodeId)
+    $owned = New-Object Collections.Generic.List[string]
+    $orphans = New-Object Collections.Generic.List[string]
+    foreach ($container in $Containers) {
+        $labels = $container.Config.Labels
+        if (-not $labels) { continue }
+        $value = { param($name) $property = $labels.PSObject.Properties[$name]; if ($property) { [string]$property.Value } else { '' } }
+        if ((& $value 'ajiasu.owner') -ne 'control-plane') { continue }
+        $containerNode = [Guid]::Empty
+        $nodeValid = [Guid]::TryParse((& $value 'ajiasu.node_id'), [ref]$containerNode)
+        if ($nodeValid -and $containerNode -ne $NodeId) { continue }
+        $runner = [Guid]::Empty; $tenant = [Guid]::Empty; $endpoint = [Guid]::Empty; $operation = [Guid]::Empty
+        $valid = $nodeValid -and $containerNode -eq $NodeId -and
+            [Guid]::TryParse((& $value 'ajiasu.runner_id'), [ref]$runner) -and
+            [Guid]::TryParse((& $value 'ajiasu.tenant_id'), [ref]$tenant) -and
+            [Guid]::TryParse((& $value 'ajiasu.endpoint_id'), [ref]$endpoint) -and
+            [Guid]::TryParse((& $value 'ajiasu.operation_id'), [ref]$operation) -and
+            ((& $value 'ajiasu.generation') -match '^[1-9][0-9]*$')
+        if ($valid) { $owned.Add([string]$container.Id) } else { $orphans.Add([string]$container.Id) }
+    }
+    return [pscustomobject]@{ Owned = @($owned); Orphans = @($orphans) }
+}
+
+function Invoke-ComposeSmokeProbes {
+    param([Parameter(Mandatory = $true)][string]$ConfigurationFile)
+    if (-not (Test-Path -LiteralPath $ConfigurationFile -PathType Leaf)) { throw 'Smoke configuration file is unavailable' }
+    $configuration = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $ConfigurationFile)) | ConvertFrom-Json
+    foreach ($name in @('fixed', 'pool')) {
+        $probe = $configuration.$name
+        if (-not $probe -or -not $probe.proxy_uri -or -not $probe.target_uri -or -not $probe.username -or -not $probe.password) { throw "Smoke probe '$name' is incomplete" }
+        Add-Type -AssemblyName System.Net.Http
+        $handler = New-Object System.Net.Http.HttpClientHandler
+        $handler.Proxy = New-Object System.Net.WebProxy([Uri]$probe.proxy_uri)
+        $handler.Proxy.Credentials = New-Object System.Net.NetworkCredential([string]$probe.username, [string]$probe.password)
+        $client = New-Object System.Net.Http.HttpClient -ArgumentList $handler
+        $client.Timeout = [TimeSpan]::FromSeconds(15)
+        try {
+            $response = $client.GetAsync([Uri]$probe.target_uri).GetAwaiter().GetResult()
+            $expected = if ($probe.expected_status) { [int]$probe.expected_status } else { 200 }
+            if ([int]$response.StatusCode -ne $expected) { throw "Smoke probe '$name' returned an unexpected status" }
+        } finally { $client.Dispose(); $handler.Dispose() }
+    }
+}
+
+function Assert-ComposeGeneratedState {
+    param([Parameter(Mandatory = $true)][string]$Directory, [Parameter(Mandatory = $true)][string]$EnvironmentId)
+    $manifestPath = Join-Path $Directory 'generated-state.json'
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'Generated-state manifest is unavailable' }
+    $manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json
+    if ($manifest.schema_version -ne 1 -or $manifest.environment_id -cne $EnvironmentId) { throw 'Generated state belongs to another environment or schema' }
+    $allowed = @{'generated-state.json'=$true; 'agent-enrollment-token'=$true; 'gateway-enrollment-token'=$true}
+    foreach ($name in $script:ComposeStableGeneratedFiles) {
+        if (-not $manifest.files.PSObject.Properties[$name]) { throw "Generated-state manifest omits: $name" }
+    }
+    foreach ($property in $manifest.files.PSObject.Properties) {
+        $allowed[$property.Name] = $true
+        $path = Join-Path $Directory $property.Name
+        $item = Get-Item -LiteralPath $path -Force
+        if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "Unsafe generated-state file: $($property.Name)" }
+        $digest = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($digest -cne [string]$property.Value.sha256 -or $item.Length -ne [int64]$property.Value.size) { throw "Generated-state integrity failure: $($property.Name)" }
+    }
+    foreach ($item in Get-ChildItem -LiteralPath $Directory -Force) {
+        if (-not $allowed.ContainsKey($item.Name)) { throw "Unexpected generated-state entry: $($item.Name)" }
     }
 }

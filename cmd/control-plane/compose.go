@@ -41,6 +41,8 @@ const composeHelp = `Usage:
   control-plane compose validate --output DIR --environment-id ID
   control-plane compose enroll-agent --name NAME --output FILE
   control-plane compose enroll-gateway --name NAME --fingerprint-file FILE --output FILE
+  control-plane compose runtime-status
+  control-plane compose drain
 
 Secret values are generated or read through *_FILE environment variables. They are never accepted as flags.`
 
@@ -115,6 +117,16 @@ func runComposeCLI(args []string, lookup func(string) (string, bool), stdout, st
 		err = executeComposeAgentEnrollment(context.Background(), args[2:], lookup, stdout, stderr)
 	case "enroll-gateway":
 		err = executeComposeGatewayEnrollment(context.Background(), args[2:], lookup, stdout, stderr)
+	case "runtime-status":
+		if len(args) != 2 {
+			return true, 2
+		}
+		err = executeComposeRuntimeStatus(context.Background(), lookup, stdout)
+	case "drain":
+		if len(args) != 2 {
+			return true, 2
+		}
+		err = executeComposeDrain(context.Background(), lookup, stdout)
 	default:
 		_, _ = fmt.Fprintln(stderr, "unknown compose command")
 		return true, 2
@@ -124,6 +136,84 @@ func runComposeCLI(args []string, lookup func(string) (string, bool), stdout, st
 		return true, 1
 	}
 	return true, 0
+}
+
+type composeRuntimeStatus struct {
+	Nodes       struct{ Total, Online, Draining, Sessions int64 }
+	Gateways    struct{ Total, Online, Sessions int64 }
+	Assignments struct{ FixedAssigned, FixedDraining, PoolAssigned, PoolDraining, Other int64 }
+}
+
+func (s composeRuntimeStatus) MarshalJSON() ([]byte, error) {
+	type category map[string]int64
+	return json.Marshal(map[string]category{
+		"nodes":       {"total": s.Nodes.Total, "online": s.Nodes.Online, "draining": s.Nodes.Draining, "sessions": s.Nodes.Sessions},
+		"gateways":    {"total": s.Gateways.Total, "online": s.Gateways.Online, "sessions": s.Gateways.Sessions},
+		"assignments": {"fixed_assigned": s.Assignments.FixedAssigned, "fixed_draining": s.Assignments.FixedDraining, "pool_assigned": s.Assignments.PoolAssigned, "pool_draining": s.Assignments.PoolDraining, "other": s.Assignments.Other},
+	})
+}
+
+func executeComposeRuntimeStatus(ctx context.Context, lookup func(string) (string, bool), stdout io.Writer) error {
+	return withComposePools(ctx, lookup, func(pools *database.Pools) error {
+		status, err := readComposeRuntimeStatus(ctx, pools)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(stdout).Encode(status)
+	})
+}
+
+func readComposeRuntimeStatus(ctx context.Context, pools *database.Pools) (composeRuntimeStatus, error) {
+	var result composeRuntimeStatus
+	if pools == nil || pools.Platform == nil {
+		return result, errors.New("database is unavailable")
+	}
+	err := pools.Platform.QueryRow(ctx, `SELECT count(*),count(*) FILTER (WHERE connectivity_state='online'),count(*) FILTER (WHERE maintenance_state='draining'),(SELECT count(*) FROM nodes.node_sessions WHERE revoked_at IS NULL AND expires_at>now()) FROM nodes.nodes`).Scan(&result.Nodes.Total, &result.Nodes.Online, &result.Nodes.Draining, &result.Nodes.Sessions)
+	if err != nil {
+		return result, errors.New("read node status")
+	}
+	err = pools.Platform.QueryRow(ctx, `SELECT count(*),count(*) FILTER (WHERE connectivity_state='online'),(SELECT count(*) FROM gateways.sessions WHERE revoked_at IS NULL AND expires_at>now()) FROM gateways.gateways`).Scan(&result.Gateways.Total, &result.Gateways.Online, &result.Gateways.Sessions)
+	if err != nil {
+		return result, errors.New("read gateway status")
+	}
+	err = pools.Platform.QueryRow(ctx, `SELECT count(*) FILTER (WHERE e.binding_mode='fixed' AND a.state='assigned'),count(*) FILTER (WHERE e.binding_mode='fixed' AND a.state='draining'),count(*) FILTER (WHERE e.binding_mode='pool' AND a.state='assigned'),count(*) FILTER (WHERE e.binding_mode='pool' AND a.state='draining'),count(*) FILTER (WHERE a.state NOT IN ('assigned','draining')) FROM scheduler.endpoint_assignments a JOIN endpoints.proxy_endpoints e ON e.tenant_id=a.tenant_id AND e.id=a.endpoint_id`).Scan(&result.Assignments.FixedAssigned, &result.Assignments.FixedDraining, &result.Assignments.PoolAssigned, &result.Assignments.PoolDraining, &result.Assignments.Other)
+	if err != nil {
+		return result, errors.New("read assignment status")
+	}
+	return result, nil
+}
+
+func executeComposeDrain(ctx context.Context, lookup func(string) (string, bool), stdout io.Writer) error {
+	return withComposePools(ctx, lookup, func(pools *database.Pools) error {
+		result, err := drainComposeRuntime(ctx, pools)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(stdout).Encode(result)
+	})
+}
+
+func drainComposeRuntime(ctx context.Context, pools *database.Pools) (map[string]int64, error) {
+	if pools == nil || pools.Platform == nil {
+		return nil, errors.New("database is unavailable")
+	}
+	tx, err := pools.Platform.Begin(ctx)
+	if err != nil {
+		return nil, errors.New("begin drain")
+	}
+	defer tx.Rollback(ctx)
+	nodesResult, err := tx.Exec(ctx, `UPDATE nodes.nodes SET maintenance_state='draining',version=version+1,updated_at=now() WHERE maintenance_state IN ('active','cordoned')`)
+	if err != nil {
+		return nil, errors.New("drain nodes")
+	}
+	assignmentsResult, err := tx.Exec(ctx, `UPDATE scheduler.endpoint_assignments SET state='draining',last_reason_code='compose_shutdown',updated_at=now() WHERE state='assigned'`)
+	if err != nil {
+		return nil, errors.New("drain assignments")
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errors.New("commit drain")
+	}
+	return map[string]int64{"nodes": nodesResult.RowsAffected(), "assignments": assignmentsResult.RowsAffected()}, nil
 }
 
 func materializeCompose(options materializeOptions, lookup func(string) (string, bool)) error {
