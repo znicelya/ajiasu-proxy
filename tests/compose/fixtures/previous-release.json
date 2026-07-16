@@ -1,0 +1,12 @@
+{
+  "release_version": "0.6.0",
+  "schema_version": 11,
+  "configuration_revision": 1,
+  "images": {
+    "control-plane": "ghcr.io/dnomd343/ajiasu-control-plane@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "gateway": "ghcr.io/dnomd343/ajiasu-gateway@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "agent": "ghcr.io/dnomd343/ajiasu-agent@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "runner": "ghcr.io/dnomd343/ajiasu-runner@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "requires_database_restore_for_schema_change": true
+}
