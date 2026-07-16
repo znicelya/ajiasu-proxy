@@ -1,0 +1,108 @@
+{
+  "manifest_revision": 1,
+  "release": {
+    "version": "0.7.0-dev.1",
+    "source_revision": "0123456789abcdef0123456789abcdef01234567",
+    "configuration_revision": 1
+  },
+  "compatibility": {
+    "schema_version": 11,
+    "protocols": {
+      "agent": 2,
+      "gateway": 1,
+      "relay": 1,
+      "scheduler": 1
+    },
+    "platforms": ["linux/amd64", "linux/arm64"]
+  },
+  "images": {
+    "control-plane": {
+      "repository": "ghcr.io/dnomd343/ajiasu-control-plane",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    "gateway": {
+      "repository": "ghcr.io/dnomd343/ajiasu-gateway",
+      "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    "agent": {
+      "repository": "ghcr.io/dnomd343/ajiasu-agent",
+      "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    "runner": {
+      "repository": "ghcr.io/dnomd343/ajiasu-runner",
+      "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    "postgres": {
+      "repository": "docker.io/library/postgres",
+      "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    "redis": {
+      "repository": "docker.io/library/redis",
+      "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    "identity-provider": {
+      "repository": "quay.io/keycloak/keycloak",
+      "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    }
+  },
+  "topology": {
+    "services": ["migration", "control-plane", "gateway", "agent"],
+    "networks": ["edge", "control", "dependencies"],
+    "volumes": ["postgres-data", "agent-state", "gateway-state"],
+    "secret_mounts": [
+      "/run/secrets/ajiasu/database-normal-dsn",
+      "/run/secrets/ajiasu/database-platform-dsn",
+      "/run/secrets/ajiasu/redis-password",
+      "/run/secrets/ajiasu/oidc-client-secret",
+      "/run/secrets/ajiasu/control-plane-keyring",
+      "/run/secrets/ajiasu/agent-enrollment-token",
+      "/run/secrets/ajiasu/gateway-enrollment-token"
+    ],
+    "published_ports": [
+      {
+        "name": "gateway-http",
+        "owner": "gateway",
+        "host_bind": "0.0.0.0",
+        "host_port": 8080,
+        "container_port": 8080,
+        "protocol": "tcp"
+      },
+      {
+        "name": "gateway-socks5",
+        "owner": "gateway",
+        "host_bind": "0.0.0.0",
+        "host_port": 1080,
+        "container_port": 1080,
+        "protocol": "tcp"
+      },
+      {
+        "name": "control-management",
+        "owner": "control-plane",
+        "host_bind": "127.0.0.1",
+        "host_port": 8081,
+        "container_port": 8080,
+        "protocol": "tcp"
+      }
+    ],
+    "health_outcomes": ["live", "ready", "not_ready", "degraded", "draining", "stopped"]
+  },
+  "profiles": {
+    "development": { "state": "supported" },
+    "single-host": { "state": "supported" },
+    "external-dependencies": { "state": "supported" },
+    "console": { "state": "reserved", "image": null }
+  },
+  "future_helm": {
+    "service_names": "services",
+    "network_policies": "networks",
+    "persistent_volume_claims": "volumes",
+    "secret_keys": "secret_mounts"
+  }
+}

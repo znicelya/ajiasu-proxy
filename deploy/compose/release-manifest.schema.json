@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ajiasu.example/schemas/compose/release-manifest-revision-1.json",
+  "title": "AJiaSu Proxy Docker Compose release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_revision",
+    "release",
+    "compatibility",
+    "images",
+    "topology",
+    "profiles",
+    "future_helm"
+  ],
+  "properties": {
+    "manifest_revision": { "const": 1 },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "source_revision", "configuration_revision"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "configuration_revision": { "const": 1 }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "protocols", "platforms"],
+      "properties": {
+        "schema_version": { "const": 11 },
+        "protocols": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["agent", "gateway", "relay", "scheduler"],
+          "properties": {
+            "agent": { "const": 2 },
+            "gateway": { "const": 1 },
+            "relay": { "const": 1 },
+            "scheduler": { "const": 1 }
+          }
+        },
+        "platforms": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "enum": ["linux/amd64", "linux/arm64"] }
+        }
+      }
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "control-plane",
+        "gateway",
+        "agent",
+        "runner",
+        "postgres",
+        "redis",
+        "identity-provider"
+      ],
+      "properties": {
+        "control-plane": { "$ref": "#/$defs/image" },
+        "gateway": { "$ref": "#/$defs/image" },
+        "agent": { "$ref": "#/$defs/image" },
+        "runner": { "$ref": "#/$defs/image" },
+        "postgres": { "$ref": "#/$defs/image" },
+        "redis": { "$ref": "#/$defs/image" },
+        "identity-provider": { "$ref": "#/$defs/image" }
+      }
+    },
+    "topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["services", "networks", "volumes", "secret_mounts", "published_ports", "health_outcomes"],
+      "properties": {
+        "services": {
+          "type": "array",
+          "const": ["migration", "control-plane", "gateway", "agent"]
+        },
+        "networks": {
+          "type": "array",
+          "const": ["edge", "control", "dependencies"]
+        },
+        "volumes": {
+          "type": "array",
+          "const": ["postgres-data", "agent-state", "gateway-state"]
+        },
+        "secret_mounts": {
+          "type": "array",
+          "minItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^/run/secrets/ajiasu/[a-z0-9-]+$"
+          }
+        },
+        "published_ports": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/published_port" }
+        },
+        "health_outcomes": {
+          "type": "array",
+          "const": ["live", "ready", "not_ready", "degraded", "draining", "stopped"]
+        }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["development", "single-host", "external-dependencies", "console"],
+      "properties": {
+        "development": { "$ref": "#/$defs/enabled_profile" },
+        "single-host": { "$ref": "#/$defs/enabled_profile" },
+        "external-dependencies": { "$ref": "#/$defs/enabled_profile" },
+        "console": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "image"],
+          "properties": {
+            "state": { "const": "reserved" },
+            "image": { "type": "null" }
+          }
+        }
+      }
+    },
+    "future_helm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_names", "network_policies", "persistent_volume_claims", "secret_keys"],
+      "properties": {
+        "service_names": { "const": "services" },
+        "network_policies": { "const": "networks" },
+        "persistent_volume_claims": { "const": "volumes" },
+        "secret_keys": { "const": "secret_mounts" }
+      }
+    }
+  },
+  "$defs": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "digest", "platforms"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+(?::[0-9]+)?(?:/[A-Za-z0-9._-]+)+$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "platforms": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["linux/amd64", "linux/arm64"] }
+        }
+      }
+    },
+    "published_port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "owner", "host_bind", "host_port", "container_port", "protocol"],
+      "properties": {
+        "name": { "enum": ["gateway-http", "gateway-socks5", "control-management"] },
+        "owner": { "enum": ["gateway", "control-plane"] },
+        "host_bind": { "enum": ["0.0.0.0", "127.0.0.1"] },
+        "host_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "container_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "protocol": { "const": "tcp" }
+      }
+    },
+    "enabled_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": { "state": { "const": "supported" } }
+    }
+  }
+}

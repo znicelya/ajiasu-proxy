@@ -1,0 +1,166 @@
+revision: 1
+deployment_modes:
+  - development
+  - single-host
+  - external-dependencies
+owners:
+  - release
+  - control-plane
+  - gateway
+  - agent
+  - lifecycle
+configurations:
+  - name: AJIASU_RELEASE_MANIFEST
+    owner: release
+    container_environment: null
+    secret_mount: null
+    default_policy: required
+    modes: [development, single-host, external-dependencies]
+    helm_value: global.releaseManifest
+  - name: AJIASU_ENVIRONMENT_ID
+    owner: lifecycle
+    container_environment: AJIASU_ENVIRONMENT_ID
+    secret_mount: null
+    default_policy: generated_once
+    modes: [development, single-host, external-dependencies]
+    helm_value: global.environmentId
+  - name: AJIASU_HTTP_BIND
+    owner: control-plane
+    container_environment: AJIASU_HTTP_BIND
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: controlPlane.http.bind
+  - name: AJIASU_AGENT_GRPC_BIND
+    owner: control-plane
+    container_environment: AJIASU_AGENT_GRPC_BIND
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: controlPlane.agentGrpc.bind
+  - name: AJIASU_GATEWAY_GRPC_BIND
+    owner: control-plane
+    container_environment: AJIASU_GATEWAY_GRPC_BIND
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: controlPlane.gatewayGrpc.bind
+  - name: AJIASU_DATABASE_NORMAL_DSN_FILE
+    owner: control-plane
+    container_environment: AJIASU_DATABASE_NORMAL_DSN_FILE
+    secret_mount: /run/secrets/ajiasu/database-normal-dsn
+    default_policy: required_secret_file
+    modes: [development, single-host, external-dependencies]
+    helm_value: controlPlane.database.normalDsnSecretKey
+  - name: AJIASU_DATABASE_PLATFORM_DSN_FILE
+    owner: control-plane
+    container_environment: AJIASU_DATABASE_PLATFORM_DSN_FILE
+    secret_mount: /run/secrets/ajiasu/database-platform-dsn
+    default_policy: required_secret_file
+    modes: [development, single-host, external-dependencies]
+    helm_value: controlPlane.database.platformDsnSecretKey
+  - name: AJIASU_REDIS_PASSWORD_FILE
+    owner: control-plane
+    container_environment: AJIASU_REDIS_PASSWORD_FILE
+    secret_mount: /run/secrets/ajiasu/redis-password
+    default_policy: required_secret_file
+    modes: [development, single-host, external-dependencies]
+    helm_value: controlPlane.redis.passwordSecretKey
+  - name: AJIASU_OIDC_CLIENT_SECRET_FILE
+    owner: control-plane
+    container_environment: AJIASU_OIDC_CLIENT_SECRET_FILE
+    secret_mount: /run/secrets/ajiasu/oidc-client-secret
+    default_policy: required_secret_file
+    modes: [development, single-host, external-dependencies]
+    helm_value: controlPlane.oidc.clientSecretKey
+  - name: AJIASU_KEYRING_FILE
+    owner: control-plane
+    container_environment: AJIASU_KEYRING_FILE
+    secret_mount: /run/secrets/ajiasu/control-plane-keyring
+    default_policy: generated_secret_file
+    modes: [development, single-host, external-dependencies]
+    helm_value: controlPlane.keyring.secretKey
+  - name: AJIASU_GATEWAY_HTTP_LISTEN
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_HTTP_LISTEN
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.listeners.http
+  - name: AJIASU_GATEWAY_SOCKS5_LISTEN
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_SOCKS5_LISTEN
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.listeners.socks5
+  - name: AJIASU_GATEWAY_CONTROL_PLANE_ENDPOINT
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_CONTROL_PLANE_ENDPOINT
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.controlPlaneEndpoint
+  - name: AJIASU_GATEWAY_STATE_DIRECTORY
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_STATE_DIRECTORY
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.state.mountPath
+  - name: AJIASU_GATEWAY_ENROLLMENT_TOKEN_FILE
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_ENROLLMENT_TOKEN_FILE
+    secret_mount: /run/secrets/ajiasu/gateway-enrollment-token
+    default_policy: one_time_secret_file
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.enrollment.secretKey
+  - name: AJIASU_AGENT_CONTROL_PLANE_ENDPOINT
+    owner: agent
+    container_environment: AJIASU_AGENT_CONTROL_PLANE_ENDPOINT
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.controlPlaneEndpoint
+  - name: AJIASU_AGENT_STATE_DIRECTORY
+    owner: agent
+    container_environment: AJIASU_AGENT_STATE_DIRECTORY
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.state.mountPath
+  - name: AJIASU_AGENT_ENROLLMENT_TOKEN_FILE
+    owner: agent
+    container_environment: AJIASU_AGENT_ENROLLMENT_TOKEN_FILE
+    secret_mount: /run/secrets/ajiasu/agent-enrollment-token
+    default_policy: one_time_secret_file
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.enrollment.secretKey
+  - name: AJIASU_AGENT_RUNNER_IMAGE
+    owner: agent
+    container_environment: AJIASU_AGENT_RUNNER_IMAGE
+    secret_mount: null
+    default_policy: release_manifest
+    modes: [development, single-host, external-dependencies]
+    helm_value: runner.image
+  - name: AJIASU_DOCKER_SOCKET
+    owner: agent
+    container_environment: AJIASU_DOCKER_SOCKET
+    secret_mount: null
+    default_policy: host_discovery
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.runtime.dockerSocket
+  - name: AJIASU_DOCKER_GID
+    owner: agent
+    container_environment: null
+    secret_mount: null
+    default_policy: host_discovery
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.runtime.dockerGroupId
+  - name: AJIASU_SCHEDULER_LEASE_NAMESPACE
+    owner: control-plane
+    container_environment: AJIASU_SCHEDULER_LEASE_NAMESPACE
+    secret_mount: null
+    default_policy: derived_from_environment_id
+    modes: [development, single-host, external-dependencies]
+    helm_value: controlPlane.scheduler.leaseNamespace
