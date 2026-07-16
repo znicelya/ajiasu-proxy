@@ -157,7 +157,7 @@ production constraints but cannot redefine security-critical ownership.
                                 |
                          +-------------+
                          |   Gateway   |
-                         +------+------+ 
+                         +------+------+
                                 | control/relay network
                  +--------------+---------------+
                  |                              |
