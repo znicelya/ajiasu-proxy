@@ -1,17 +1,60 @@
-use std::net::SocketAddr;
+use ajiasu_gateway::{cli, config::GatewayConfig};
+use tracing::{error, info};
 
-use ajiasu_gateway::config::GatewayConfig;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(exit_code) = cli::run_env(&args) {
+        if exit_code != 0 {
+            std::process::exit(exit_code);
+        }
+        return Ok(());
+    }
+    tracing_subscriber::fmt()
+        .json()
+        .with_env_filter("info")
+        .init();
+    let config = GatewayConfig::from_env()?;
+    info!(event = "gateway_starting", gateway_name = %config.gateway_name);
+    shutdown_signal().await;
+    info!(event = "gateway_shutdown_started");
+    if tokio::time::timeout(config.shutdown_timeout, async {})
+        .await
+        .is_err()
+    {
+        error!(event = "gateway_shutdown_timeout");
+        return Err("gateway shutdown deadline exceeded".into());
+    }
+    info!(event = "gateway_shutdown_complete");
+    Ok(())
+}
 
-fn main() {
-    let config = GatewayConfig {
-        http_listen: SocketAddr::from(([0, 0, 0, 0], 8080)),
-        socks5_listen: SocketAddr::from(([0, 0, 0, 0], 1080)),
-        control_endpoint: std::env::var("AJIASU_CONTROL_ENDPOINT").unwrap_or_default(),
-        max_header_bytes: 32 * 1024,
-        max_connections: 1000,
-    };
-    if let Err(error) = config.validate() {
-        eprintln!("gateway configuration invalid: {error}");
-        std::process::exit(78);
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        let mut terminate =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("install SIGTERM handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = terminate.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn shutdown_deadline_is_bounded() {
+        let result = tokio::time::timeout(
+            std::time::Duration::from_millis(10),
+            std::future::pending::<()>(),
+        )
+        .await;
+        assert!(result.is_err());
     }
 }

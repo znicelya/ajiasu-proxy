@@ -9,10 +9,13 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dnomd343/ajiasu-proxy/internal/platform/securefile"
 )
 
 type Environment string
@@ -24,20 +27,39 @@ const (
 
 type Config struct {
 	Environment Environment
+	Deployment  Deployment
 	HTTP        HTTP
 	AgentGRPC   AgentGRPC
 	Database    Database
 	Redis       Redis
 	OIDC        OIDC
 	Session     Session
-	KeyringFile string
+	Keyring     Secret
 	LocalAuth   LocalAuth
+}
+
+type Deployment struct {
+	EnvironmentID string
+}
+
+type Secret struct{ value []byte }
+
+func newSecret(value []byte) Secret { return Secret{value: value} }
+
+func (s Secret) Bytes() []byte { return bytes.Clone(s.value) }
+
+func (s Secret) Text() string { return string(s.value) }
+
+func (Secret) String() string   { return "[redacted]" }
+func (Secret) GoString() string { return "[redacted]" }
+func (Secret) LogValue() slog.Value {
+	return slog.StringValue("[redacted]")
 }
 
 type Redis struct {
 	Address            string
 	Username           string
-	PasswordFile       string
+	Password           Secret
 	Database           int
 	TLS                bool
 	LeaseNamespace     string
@@ -80,10 +102,10 @@ type DatabasePool struct {
 }
 
 type OIDC struct {
-	Issuer           string
-	ClientID         string
-	ClientSecretFile string
-	RedirectURL      string
+	Issuer       string
+	ClientID     string
+	ClientSecret Secret
+	RedirectURL  string
 }
 
 type Session struct {
@@ -102,6 +124,8 @@ type loader struct {
 	lookup func(string) (string, bool)
 }
 
+var environmentIDPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
+
 func Load(lookup func(string) (string, bool)) (Config, error) {
 	if lookup == nil {
 		return Config{}, fmt.Errorf("configuration lookup is required")
@@ -116,12 +140,19 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	if environment != EnvironmentDevelopment && environment != EnvironmentProduction {
 		return Config{}, fieldError("AJIASU_ENVIRONMENT", "must be development or production")
 	}
+	environmentID, err := l.required("AJIASU_ENVIRONMENT_ID")
+	if err != nil {
+		return Config{}, err
+	}
+	if !environmentIDPattern.MatchString(environmentID) {
+		return Config{}, fieldError("AJIASU_ENVIRONMENT_ID", "must be a lowercase deployment identifier")
+	}
 
 	httpConfig, err := l.loadHTTP()
 	if err != nil {
 		return Config{}, err
 	}
-	database, err := l.loadDatabase()
+	database, err := l.loadDatabase(environment)
 	if err != nil {
 		return Config{}, err
 	}
@@ -144,7 +175,8 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	if err := validateKeyringFile(keyringFile); err != nil {
+	keyringBytes, err := readSecret(keyringFile, 32, 32)
+	if err != nil {
 		return Config{}, fieldError("AJIASU_KEYRING_FILE", err.Error())
 	}
 	localAuth, err := l.loadLocalAuth()
@@ -158,13 +190,14 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 
 	return Config{
 		Environment: environment,
+		Deployment:  Deployment{EnvironmentID: environmentID},
 		HTTP:        httpConfig,
 		AgentGRPC:   agentGRPC,
 		Database:    database,
 		Redis:       redisConfig,
 		OIDC:        oidc,
 		Session:     session,
-		KeyringFile: keyringFile,
+		Keyring:     newSecret(keyringBytes),
 		LocalAuth:   localAuth,
 	}, nil
 }
@@ -172,6 +205,7 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 func (c Config) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("environment", string(c.Environment)),
+		slog.String("environment_id", c.Deployment.EnvironmentID),
 		slog.Group("http",
 			slog.String("bind", c.HTTP.Bind),
 			slog.Duration("read_header_timeout", c.HTTP.ReadHeaderTimeout),
@@ -204,7 +238,7 @@ func (c Config) LogValue() slog.Value {
 			slog.String("redirect_url", c.OIDC.RedirectURL),
 		),
 		slog.String("session", "[redacted]"),
-		slog.String("keyring_file", "[redacted]"),
+		slog.String("keyring", "[redacted]"),
 		slog.Group("local_auth",
 			slog.Bool("enabled", c.LocalAuth.Enabled),
 			slog.Int("allowed_cidr_count", len(c.LocalAuth.AllowedCIDRs)),
@@ -225,12 +259,14 @@ func (l loader) loadRedis() (Redis, error) {
 	if err != nil {
 		return Redis{}, err
 	}
-	password, _, err := readRegularFile(passwordFile, 64*1024+1)
-	if err != nil || len(bytes.TrimSpace(password)) == 0 || len(password) > 64*1024 {
+	password, err := readSecret(passwordFile, 1, 64*1024)
+	if err != nil || len(bytes.TrimSpace(password)) == 0 {
 		clear(password)
 		return Redis{}, fieldError("AJIASU_REDIS_PASSWORD_FILE", "must identify a nonempty accessible regular file")
 	}
-	clear(password)
+	rawPassword := password
+	password = bytes.Clone(bytes.TrimSpace(rawPassword))
+	clear(rawPassword)
 	database, err := l.integer("AJIASU_REDIS_DATABASE")
 	if err != nil || database < 0 {
 		return Redis{}, fieldError("AJIASU_REDIS_DATABASE", "must be a nonnegative integer")
@@ -258,7 +294,7 @@ func (l loader) loadRedis() (Redis, error) {
 	if ttl < 3*time.Second || ttl > 5*time.Minute || renew >= ttl/2 || timeout > renew {
 		return Redis{}, fieldError("AJIASU_SCHEDULER_LEASE_TTL", "is incompatible with renewal and timeout settings")
 	}
-	return Redis{Address: address, Username: strings.TrimSpace(username), PasswordFile: passwordFile, Database: database, TLS: tlsEnabled, LeaseNamespace: namespace, LeaseTTL: ttl, LeaseRenewInterval: renew, OperationTimeout: timeout}, nil
+	return Redis{Address: address, Username: strings.TrimSpace(username), Password: newSecret(password), Database: database, TLS: tlsEnabled, LeaseNamespace: namespace, LeaseTTL: ttl, LeaseRenewInterval: renew, OperationTimeout: timeout}, nil
 }
 
 func (c Config) String() string {
@@ -343,21 +379,21 @@ func (l loader) loadHTTP() (HTTP, error) {
 	return HTTP{Bind: bind, ReadHeaderTimeout: readHeaderTimeout, ReadTimeout: readTimeout, WriteTimeout: writeTimeout, IdleTimeout: idleTimeout, ShutdownTimeout: shutdownTimeout}, nil
 }
 
-func (l loader) loadDatabase() (Database, error) {
-	normal, err := l.databasePool("NORMAL")
+func (l loader) loadDatabase(environment Environment) (Database, error) {
+	normal, err := l.databasePool("NORMAL", environment)
 	if err != nil {
 		return Database{}, err
 	}
-	platform, err := l.databasePool("PLATFORM")
+	platform, err := l.databasePool("PLATFORM", environment)
 	if err != nil {
 		return Database{}, err
 	}
 	return Database{Normal: normal, Platform: platform}, nil
 }
 
-func (l loader) databasePool(name string) (DatabasePool, error) {
+func (l loader) databasePool(name string, environment Environment) (DatabasePool, error) {
 	prefix := "AJIASU_DATABASE_" + name
-	dsn, err := l.required(prefix + "_DSN")
+	dsn, err := l.secretText(prefix+"_DSN", prefix+"_DSN_FILE", environment == EnvironmentProduction, 64*1024)
 	if err != nil {
 		return DatabasePool{}, err
 	}
@@ -437,9 +473,14 @@ func (l loader) loadOIDC(environment Environment) (OIDC, error) {
 	if err != nil {
 		return OIDC{}, err
 	}
-	if err := validateClientSecretFile(clientSecretFile); err != nil {
-		return OIDC{}, fieldError("AJIASU_OIDC_CLIENT_SECRET_FILE", err.Error())
+	clientSecret, err := readSecret(clientSecretFile, 1, 64*1024)
+	if err != nil || len(bytes.TrimSpace(clientSecret)) == 0 {
+		clear(clientSecret)
+		return OIDC{}, fieldError("AJIASU_OIDC_CLIENT_SECRET_FILE", "must identify a nonempty accessible regular file")
 	}
+	rawClientSecret := clientSecret
+	clientSecret = bytes.Clone(bytes.TrimSpace(rawClientSecret))
+	clear(rawClientSecret)
 	redirectURL, err := l.required("AJIASU_OIDC_REDIRECT_URL")
 	if err != nil {
 		return OIDC{}, err
@@ -447,7 +488,7 @@ func (l loader) loadOIDC(environment Environment) (OIDC, error) {
 	if err := validateHTTPURL(redirectURL, environment); err != nil {
 		return OIDC{}, fieldError("AJIASU_OIDC_REDIRECT_URL", err.Error())
 	}
-	return OIDC{Issuer: issuer, ClientID: clientID, ClientSecretFile: clientSecretFile, RedirectURL: redirectURL}, nil
+	return OIDC{Issuer: issuer, ClientID: clientID, ClientSecret: newSecret(clientSecret), RedirectURL: redirectURL}, nil
 }
 
 func validateHTTPURL(value string, environment Environment) error {
@@ -517,6 +558,35 @@ func (l loader) required(name string) (string, error) {
 	return value, nil
 }
 
+func (l loader) secretText(directName, fileName string, requireFile bool, maximum int64) (string, error) {
+	directValue, directSet := l.lookup(directName)
+	filePath, fileSet := l.lookup(fileName)
+	directSet = directSet && strings.TrimSpace(directValue) != ""
+	fileSet = fileSet && strings.TrimSpace(filePath) != ""
+	if directSet && fileSet {
+		return "", fieldError(fileName, "conflicts with "+directName)
+	}
+	if requireFile && directSet {
+		return "", fieldError(directName, "is not allowed in production; use "+fileName)
+	}
+	if fileSet {
+		content, err := readSecret(filePath, 1, maximum)
+		if err != nil {
+			return "", fieldError(fileName, "must identify a nonempty private regular file")
+		}
+		defer clear(content)
+		value := strings.TrimSpace(string(content))
+		if value == "" {
+			return "", fieldError(fileName, "must identify a nonempty private regular file")
+		}
+		return value, nil
+	}
+	if directSet {
+		return strings.TrimSpace(directValue), nil
+	}
+	return "", fieldError(fileName, "is required")
+}
+
 func (l loader) duration(name string) (time.Duration, error) {
 	value, err := l.required(name)
 	if err != nil {
@@ -564,31 +634,12 @@ func (l loader) integer(name string) (int, error) {
 	return result, nil
 }
 
-func validateClientSecretFile(path string) error {
-	content, _, err := readRegularFile(path, 64*1024+1)
+func readSecret(path string, minimum, maximum int64) ([]byte, error) {
+	content, err := securefile.Read(path, minimum, maximum, true)
 	if err != nil {
-		return fmt.Errorf("must identify an accessible regular file")
+		return nil, fmt.Errorf("must identify a private regular file with valid size")
 	}
-	defer clear(content)
-	if len(content) > 64*1024 || len(bytes.TrimSpace(content)) == 0 {
-		return fmt.Errorf("must contain a nonempty client secret")
-	}
-	return nil
-}
-
-func validateKeyringFile(path string) error {
-	content, info, err := readRegularFile(path, 33)
-	if err != nil {
-		return fmt.Errorf("must identify an accessible regular file")
-	}
-	defer clear(content)
-	if len(content) != 32 {
-		return fmt.Errorf("must be exactly 32 bytes")
-	}
-	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
-		return fmt.Errorf("must not be accessible by group or other users")
-	}
-	return nil
+	return content, nil
 }
 
 func readRegularFile(path string, limit int64) ([]byte, os.FileInfo, error) {

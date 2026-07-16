@@ -111,10 +111,7 @@ func executeAdminBootstrap(ctx context.Context, lookup func(string) (string, boo
 	if err != nil {
 		return errors.New("configuration is invalid")
 	}
-	keyMaterial, err := os.ReadFile(cfg.KeyringFile)
-	if err != nil {
-		return errors.New("keyring file is unavailable")
-	}
+	keyMaterial := cfg.Keyring.Bytes()
 	defer clear(keyMaterial)
 	ring, err := keyring.NewAESGCM(keyMaterial)
 	if err != nil {

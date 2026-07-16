@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -15,20 +16,89 @@ import (
 
 func TestLoadRejectsMissingNormalDatabaseDSN(t *testing.T) {
 	env := validEnvironment(t)
-	env["AJIASU_DATABASE_NORMAL_DSN"] = ""
+	env["AJIASU_DATABASE_NORMAL_DSN_FILE"] = ""
 	applyEnvironment(t, env)
 
 	_, err := config.Load(os.LookupEnv)
-	assertErrorNamesField(t, err, "AJIASU_DATABASE_NORMAL_DSN")
+	assertErrorNamesField(t, err, "AJIASU_DATABASE_NORMAL_DSN_FILE")
 }
 
 func TestLoadRejectsMissingPlatformDatabaseDSN(t *testing.T) {
 	env := validEnvironment(t)
-	env["AJIASU_DATABASE_PLATFORM_DSN"] = ""
+	env["AJIASU_DATABASE_PLATFORM_DSN_FILE"] = ""
 	applyEnvironment(t, env)
 
 	_, err := config.Load(os.LookupEnv)
-	assertErrorNamesField(t, err, "AJIASU_DATABASE_PLATFORM_DSN")
+	assertErrorNamesField(t, err, "AJIASU_DATABASE_PLATFORM_DSN_FILE")
+}
+
+func TestLoadRejectsConflictingDatabaseDSNAndFile(t *testing.T) {
+	env := validEnvironment(t)
+	env["AJIASU_DATABASE_NORMAL_DSN"] = "postgres://must-not-appear@example.invalid/db"
+	applyEnvironment(t, env)
+
+	_, err := config.Load(os.LookupEnv)
+	assertErrorNamesField(t, err, "AJIASU_DATABASE_NORMAL_DSN_FILE")
+	if strings.Contains(fmt.Sprint(err), "must-not-appear") {
+		t.Fatalf("Load() exposed conflicting DSN: %v", err)
+	}
+}
+
+func TestLoadRejectsDirectDatabaseDSNInProduction(t *testing.T) {
+	env := validEnvironment(t)
+	env["AJIASU_ENVIRONMENT"] = "production"
+	env["AJIASU_SESSION_COOKIE_SECURE"] = "true"
+	env["AJIASU_DATABASE_NORMAL_DSN"] = "postgres://must-not-appear@example.invalid/db"
+	delete(env, "AJIASU_DATABASE_NORMAL_DSN_FILE")
+	applyEnvironment(t, env)
+
+	_, err := config.Load(os.LookupEnv)
+	assertErrorNamesField(t, err, "AJIASU_DATABASE_NORMAL_DSN")
+	if strings.Contains(fmt.Sprint(err), "must-not-appear") {
+		t.Fatalf("Load() exposed direct DSN: %v", err)
+	}
+}
+
+func TestLoadRejectsUnsafeDatabaseDSNFile(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		content []byte
+		setup   func(*testing.T, string)
+	}{
+		{name: "whitespace", content: []byte(" \r\n\t")},
+		{name: "oversize", content: bytes.Repeat([]byte("x"), 64*1024+1)},
+		{name: "directory", setup: func(t *testing.T, path string) {
+			if err := os.Mkdir(path, 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "symlink", setup: func(t *testing.T, path string) {
+			target := filepath.Join(filepath.Dir(path), "target")
+			if err := os.WriteFile(target, []byte("postgres://user:secret@localhost/db"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, path); err != nil {
+				t.Skipf("symbolic links unavailable: %v", err)
+			}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			env := validEnvironment(t)
+			path := filepath.Join(t.TempDir(), "normal-dsn")
+			if test.setup != nil {
+				test.setup(t, path)
+			} else if err := os.WriteFile(path, test.content, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			env["AJIASU_DATABASE_NORMAL_DSN_FILE"] = path
+			applyEnvironment(t, env)
+			_, err := config.Load(os.LookupEnv)
+			assertErrorNamesField(t, err, "AJIASU_DATABASE_NORMAL_DSN_FILE")
+			if strings.Contains(fmt.Sprint(err), path) {
+				t.Fatalf("Load() exposed DSN path: %v", err)
+			}
+		})
+	}
 }
 
 func TestLoadRejectsInsecureProductionCookie(t *testing.T) {
@@ -196,6 +266,9 @@ func TestLoadAcceptsExplicitDevelopmentConfiguration(t *testing.T) {
 	if cfg.Environment != config.EnvironmentDevelopment {
 		t.Fatalf("Environment = %q", cfg.Environment)
 	}
+	if cfg.Deployment.EnvironmentID != "phase7-test" {
+		t.Fatalf("Deployment = %#v", cfg.Deployment)
+	}
 	if cfg.HTTP.Bind != "127.0.0.1:8080" || cfg.HTTP.ShutdownTimeout != 7*time.Second {
 		t.Fatalf("HTTP = %#v", cfg.HTTP)
 	}
@@ -285,10 +358,10 @@ func TestConfigStringRedactsSecrets(t *testing.T) {
 		for _, secret := range []string{
 			"normal-password",
 			"platform-password",
-			cfg.OIDC.ClientSecretFile,
-			cfg.Redis.PasswordFile,
+			cfg.OIDC.ClientSecret.Text(),
+			cfg.Redis.Password.Text(),
 			"session-cookie",
-			cfg.KeyringFile,
+			cfg.Keyring.Text(),
 			"0123456789abcdef0123456789abcdef",
 		} {
 			if strings.Contains(formatted, secret) {
@@ -317,9 +390,18 @@ func validEnvironment(t *testing.T) map[string]string {
 	if err := os.WriteFile(redisPassword, []byte("redis-secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	normalDSN := filepath.Join(dir, "normal-dsn")
+	if err := os.WriteFile(normalDSN, []byte("postgres://normal:normal-password@localhost/normal"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	platformDSN := filepath.Join(dir, "platform-dsn")
+	if err := os.WriteFile(platformDSN, []byte("postgres://platform:platform-password@localhost/platform"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	return map[string]string{
 		"AJIASU_ENVIRONMENT":                    "development",
+		"AJIASU_ENVIRONMENT_ID":                 "phase7-test",
 		"AJIASU_HTTP_BIND":                      "127.0.0.1:8080",
 		"AJIASU_HTTP_READ_HEADER_TIMEOUT":       "2s",
 		"AJIASU_HTTP_READ_TIMEOUT":              "3s",
@@ -328,10 +410,10 @@ func validEnvironment(t *testing.T) map[string]string {
 		"AJIASU_HTTP_SHUTDOWN_TIMEOUT":          "7s",
 		"AJIASU_AGENT_GRPC_BIND":                "127.0.0.1:9090",
 		"AJIASU_AGENT_GRPC_INSECURE":            "true",
-		"AJIASU_DATABASE_NORMAL_DSN":            "postgres://normal:normal-password@localhost/normal",
+		"AJIASU_DATABASE_NORMAL_DSN_FILE":       normalDSN,
 		"AJIASU_DATABASE_NORMAL_MAX_OPEN":       "8",
 		"AJIASU_DATABASE_NORMAL_MIN_IDLE":       "4",
-		"AJIASU_DATABASE_PLATFORM_DSN":          "postgres://platform:platform-password@localhost/platform",
+		"AJIASU_DATABASE_PLATFORM_DSN_FILE":     platformDSN,
 		"AJIASU_DATABASE_PLATFORM_MAX_OPEN":     "6",
 		"AJIASU_DATABASE_PLATFORM_MIN_IDLE":     "3",
 		"AJIASU_REDIS_ADDRESS":                  "127.0.0.1:6379",

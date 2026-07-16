@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -10,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -184,10 +182,7 @@ func (r *applicationRuntime) startAgentGRPC(pools *database.Pools) error {
 		return err
 	}
 	control.SetAgentMessageHandler(reconcileService.ApplyAgentMessage)
-	key, err := readSecretFile(r.cfg.KeyringFile, 32, 32)
-	if err != nil {
-		return fmt.Errorf("load reconciler keyring: %w", err)
-	}
+	key := r.cfg.Keyring.Bytes()
 	ring, err := keyring.NewAESGCM(key)
 	clear(key)
 	if err != nil {
@@ -253,21 +248,13 @@ FROM public.goose_db_version
 
 func buildApplicationHandler(cfg config.Config, logger *slog.Logger, pools *database.Pools, readiness httpserver.Readiness) (http.Handler, error) {
 	auditService := audit.NewService()
-	key, err := readSecretFile(cfg.KeyringFile, 32, 32)
-	if err != nil {
-		return nil, fmt.Errorf("load keyring: %w", err)
-	}
+	key := cfg.Keyring.Bytes()
 	ring, err := keyring.NewAESGCM(key)
 	clear(key)
 	if err != nil {
 		return nil, err
 	}
-	clientSecretBytes, err := readSecretFile(cfg.OIDC.ClientSecretFile, 1, 64*1024)
-	if err != nil {
-		return nil, fmt.Errorf("load OIDC client secret: %w", err)
-	}
-	clientSecret := string(bytes.TrimSpace(clientSecretBytes))
-	clear(clientSecretBytes)
+	clientSecret := cfg.OIDC.ClientSecret.Text()
 	provider, err := identity.NewOIDCProvider(identity.OIDCConfig{
 		Issuer: cfg.OIDC.Issuer, ClientID: cfg.OIDC.ClientID, ClientSecret: clientSecret, RedirectURL: cfg.OIDC.RedirectURL,
 	})
@@ -380,12 +367,7 @@ func buildApplicationHandler(cfg config.Config, logger *slog.Logger, pools *data
 	if err != nil {
 		return nil, err
 	}
-	redisPasswordBytes, err := readSecretFile(cfg.Redis.PasswordFile, 1, 64*1024)
-	if err != nil {
-		return nil, fmt.Errorf("load Redis password: %w", err)
-	}
-	redisPassword := string(bytes.TrimSpace(redisPasswordBytes))
-	clear(redisPasswordBytes)
+	redisPassword := cfg.Redis.Password.Text()
 	redisClient, err := scheduler.NewRedisClient(scheduler.RedisOptions{Address: cfg.Redis.Address, Username: cfg.Redis.Username, Password: redisPassword, Database: cfg.Redis.Database, TLS: cfg.Redis.TLS})
 	if err != nil {
 		return nil, err
@@ -415,18 +397,6 @@ func buildApplicationHandler(cfg config.Config, logger *slog.Logger, pools *data
 		Modules: []httpserver.ModuleRoutes{identityHTTP, tenancyHTTP, accountHTTP, poolHTTP, nodeHTTP, endpointHTTP, proxyAccessHTTP, operationHTTP, reconcileHTTP, schedulerHTTP, auditHTTP}, Authenticate: identityHTTP.Authenticate,
 	})
 	return &managedHandler{Handler: router, close: redisClient.Close}, nil
-}
-
-func readSecretFile(path string, minimum, maximum int) ([]byte, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	if len(content) < minimum || len(content) > maximum {
-		clear(content)
-		return nil, errors.New("secret file length is invalid")
-	}
-	return content, nil
 }
 
 func trustedOrigins(redirectURL string) []string {

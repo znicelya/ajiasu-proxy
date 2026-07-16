@@ -10,6 +10,13 @@ owners:
   - agent
   - lifecycle
 configurations:
+  - name: AJIASU_ENVIRONMENT
+    owner: control-plane
+    container_environment: AJIASU_ENVIRONMENT
+    secret_mount: null
+    default_policy: deployment_mode
+    modes: [development, single-host, external-dependencies]
+    helm_value: global.environment
   - name: AJIASU_RELEASE_MANIFEST
     owner: release
     container_environment: null
@@ -24,6 +31,34 @@ configurations:
     default_policy: generated_once
     modes: [development, single-host, external-dependencies]
     helm_value: global.environmentId
+  - name: AJIASU_HEALTH_ENDPOINT
+    owner: lifecycle
+    container_environment: null
+    secret_mount: null
+    default_policy: loopback_component_endpoint
+    modes: [development, single-host, external-dependencies]
+    helm_value: health.endpoint
+  - name: AJIASU_HEALTH_TIMEOUT
+    owner: lifecycle
+    container_environment: null
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: health.timeout
+  - name: AJIASU_MIGRATIONS_DIRECTORY
+    owner: lifecycle
+    container_environment: AJIASU_MIGRATIONS_DIRECTORY
+    secret_mount: null
+    default_policy: image_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: migrations.directory
+  - name: AJIASU_MIGRATION_TIMEOUT
+    owner: lifecycle
+    container_environment: AJIASU_MIGRATION_TIMEOUT
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: migrations.timeout
   - name: AJIASU_HTTP_BIND
     owner: control-plane
     container_environment: AJIASU_HTTP_BIND
@@ -94,6 +129,13 @@ configurations:
     default_policy: package_default
     modes: [development, single-host, external-dependencies]
     helm_value: gateway.listeners.http
+  - name: AJIASU_GATEWAY_NAME
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_NAME
+    secret_mount: null
+    default_policy: generated_from_environment_id
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.name
   - name: AJIASU_GATEWAY_SOCKS5_LISTEN
     owner: gateway
     container_environment: AJIASU_GATEWAY_SOCKS5_LISTEN
@@ -115,6 +157,27 @@ configurations:
     default_policy: package_default
     modes: [development, single-host, external-dependencies]
     helm_value: gateway.state.mountPath
+  - name: AJIASU_GATEWAY_MAX_HEADER_BYTES
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_MAX_HEADER_BYTES
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.limits.maxHeaderBytes
+  - name: AJIASU_GATEWAY_MAX_CONNECTIONS
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_MAX_CONNECTIONS
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.limits.maxConnections
+  - name: AJIASU_GATEWAY_SHUTDOWN_TIMEOUT
+    owner: gateway
+    container_environment: AJIASU_GATEWAY_SHUTDOWN_TIMEOUT
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: gateway.shutdownTimeout
   - name: AJIASU_GATEWAY_ENROLLMENT_TOKEN_FILE
     owner: gateway
     container_environment: AJIASU_GATEWAY_ENROLLMENT_TOKEN_FILE
@@ -129,6 +192,13 @@ configurations:
     default_policy: package_default
     modes: [development, single-host, external-dependencies]
     helm_value: agent.controlPlaneEndpoint
+  - name: AJIASU_AGENT_NODE_NAME
+    owner: agent
+    container_environment: AJIASU_AGENT_NODE_NAME
+    secret_mount: null
+    default_policy: generated_from_environment_id
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.nodeName
   - name: AJIASU_AGENT_STATE_DIRECTORY
     owner: agent
     container_environment: AJIASU_AGENT_STATE_DIRECTORY
@@ -150,6 +220,27 @@ configurations:
     default_policy: release_manifest
     modes: [development, single-host, external-dependencies]
     helm_value: runner.image
+  - name: AJIASU_AGENT_RUNTIME
+    owner: agent
+    container_environment: AJIASU_AGENT_RUNTIME
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.runtime.kind
+  - name: AJIASU_AGENT_VERSION
+    owner: agent
+    container_environment: AJIASU_AGENT_VERSION
+    secret_mount: null
+    default_policy: release_manifest
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.version
+  - name: AJIASU_AGENT_SHUTDOWN_TIMEOUT
+    owner: agent
+    container_environment: AJIASU_AGENT_SHUTDOWN_TIMEOUT
+    secret_mount: null
+    default_policy: package_default
+    modes: [development, single-host, external-dependencies]
+    helm_value: agent.shutdownTimeout
   - name: AJIASU_DOCKER_SOCKET
     owner: agent
     container_environment: AJIASU_DOCKER_SOCKET

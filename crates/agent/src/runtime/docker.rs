@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     io::Cursor,
+    path::Path,
 };
 
 use async_trait::async_trait;
@@ -27,12 +28,17 @@ pub struct DockerRuntime {
 }
 
 impl DockerRuntime {
-    pub fn connect(node_id: Uuid, runner_image: String) -> Result<Self, RuntimeError> {
+    pub fn connect(
+        node_id: Uuid,
+        runner_image: String,
+        socket: &Path,
+    ) -> Result<Self, RuntimeError> {
         if node_id.is_nil() || !runner_image.contains("@sha256:") {
             return Err(RuntimeError::Conflict);
         }
-        let docker =
-            Docker::connect_with_local_defaults().map_err(|_| RuntimeError::Unavailable)?;
+        let socket = socket.to_str().ok_or(RuntimeError::Conflict)?;
+        let docker = Docker::connect_with_socket(socket, 120, bollard::API_DEFAULT_VERSION)
+            .map_err(|_| RuntimeError::Unavailable)?;
         Ok(Self {
             docker,
             node_id,

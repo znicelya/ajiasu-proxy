@@ -8,7 +8,7 @@ use ajiasu_agent_protocol::{
     },
 };
 use thiserror::Error;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, metadata::MetadataValue};
 use tracing::{info, warn};
@@ -17,7 +17,7 @@ use uuid::Uuid;
 use crate::{
     commands,
     config::Config,
-    inventory,
+    inventory, private_file,
     runtime::{Runtime, docker::DockerRuntime, process::ProcessRuntime},
     session::{self, SessionState},
 };
@@ -36,14 +36,19 @@ pub enum ClientError {
     ChannelClosed,
     #[error("session metadata is invalid")]
     InvalidMetadata,
+    #[error("enrollment input could not be retired")]
+    EnrollmentCleanup,
 }
 
-pub async fn run(config: Config) -> Result<(), ClientError> {
+pub async fn run(
+    mut config: Config,
+    mut shutdown: watch::Receiver<bool>,
+) -> Result<(), ClientError> {
     let session_path = config.state_directory.join("session.json");
     let instance_id = load_or_create_instance(&config.state_directory)?;
     let mut state = match session::load(&session_path)? {
         Some(state) => state,
-        None => register(&config, instance_id, &session_path).await?,
+        None => register(&mut config, instance_id, &session_path).await?,
     };
     let runtime: Arc<dyn Runtime> = if config.runtime == "docker" {
         let node_id = Uuid::parse_str(&state.node_id).map_err(|_| ClientError::InvalidMetadata)?;
@@ -54,6 +59,7 @@ pub async fn run(config: Config) -> Result<(), ClientError> {
                     .runner_image
                     .clone()
                     .ok_or(ClientError::InvalidMetadata)?,
+                &config.docker_socket,
             )
             .map_err(|_| ClientError::InvalidMetadata)?,
         )
@@ -61,31 +67,46 @@ pub async fn run(config: Config) -> Result<(), ClientError> {
         Arc::new(ProcessRuntime::new(config.state_directory.clone()))
     };
     loop {
+        if *shutdown.borrow() {
+            return Ok(());
+        }
         match connect_once(
             &config,
             instance_id,
             &mut state,
             runtime.clone(),
             &session_path,
+            &mut shutdown,
         )
         .await
         {
             Ok(()) => warn!(event = "agent_stream_closed"),
             Err(error) => warn!(event = "agent_stream_failed", error = %error),
         }
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(2)) => {}
+            result = shutdown.changed() => {
+                if result.is_err() || *shutdown.borrow() {
+                    return Ok(());
+                }
+            }
+        }
     }
 }
 
 async fn register(
-    config: &Config,
+    config: &mut Config,
     instance_id: Uuid,
     path: &Path,
 ) -> Result<SessionState, ClientError> {
-    let enrollment_token = config
-        .enrollment_token
-        .clone()
+    let enrollment = config
+        .enrollment
+        .take()
         .ok_or(ClientError::MissingEnrollment)?;
+    let enrollment_token = std::str::from_utf8(enrollment.value.expose())
+        .map_err(|_| ClientError::InvalidMetadata)?
+        .to_owned();
+    let enrollment_path = enrollment.source_path.clone();
     let mut client = AgentControlClient::connect(config.control_plane_endpoint.clone()).await?;
     let response = client
         .register_node(RegisterNodeRequest {
@@ -106,6 +127,12 @@ async fn register(
         protocol_revision: response.selected_protocol_revision,
     };
     session::save(path, &state)?;
+    if let Some(path) = enrollment_path
+        && let Err(error) = std::fs::remove_file(path)
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        return Err(ClientError::EnrollmentCleanup);
+    }
     Ok(state)
 }
 
@@ -115,6 +142,7 @@ async fn connect_once(
     state: &mut SessionState,
     runtime: Arc<dyn Runtime>,
     session_path: &Path,
+    shutdown: &mut watch::Receiver<bool>,
 ) -> Result<(), ClientError> {
     let mut client = AgentControlClient::connect(config.control_plane_endpoint.clone()).await?;
     let (tx, rx) = mpsc::channel(64);
@@ -140,10 +168,18 @@ async fn connect_once(
     let heartbeat_tx = tx.clone();
     let heartbeat_node = state.node_id.clone();
     let heartbeat_runtime = runtime.clone();
+    let mut heartbeat_shutdown = shutdown.clone();
     let heartbeat = tokio::spawn(async move {
         let mut ticker = tokio::time::interval(Duration::from_secs(10));
         loop {
-            ticker.tick().await;
+            tokio::select! {
+                _ = ticker.tick() => {}
+                result = heartbeat_shutdown.changed() => {
+                    if result.is_err() || *heartbeat_shutdown.borrow() {
+                        break;
+                    }
+                }
+            }
             let active = heartbeat_runtime
                 .inventory()
                 .await
@@ -169,7 +205,20 @@ async fn connect_once(
         }
     });
     info!(event = "agent_stream_connected", node_id = %state.node_id, protocol_revision = state.protocol_revision);
-    while let Some(message) = inbound.message().await? {
+    loop {
+        let message = tokio::select! {
+            result = inbound.message() => result?,
+            result = shutdown.changed() => {
+                if result.is_err() || *shutdown.borrow() {
+                    heartbeat.abort();
+                    return Ok(());
+                }
+                continue;
+            }
+        };
+        let Some(message) = message else {
+            break;
+        };
         match message.body {
             Some(control_message::Body::DesiredInventoryRequest(_)) => {
                 let records = runtime.inventory().await.unwrap_or_default();
@@ -197,13 +246,14 @@ async fn connect_once(
 
 fn load_or_create_instance(directory: &std::path::Path) -> Result<Uuid, session::SessionError> {
     let path = directory.join("instance-id");
-    if let Ok(value) = std::fs::read_to_string(&path)
+    if let Ok(value) = private_file::read(&path, 1, 128)
+        && let Ok(value) = std::str::from_utf8(&value)
         && let Ok(id) = Uuid::parse_str(value.trim())
     {
         return Ok(id);
     }
-    std::fs::create_dir_all(directory)?;
     let id = Uuid::now_v7();
-    std::fs::write(path, id.to_string())?;
+    private_file::atomic_write(&path, id.to_string().as_bytes())
+        .map_err(|_| session::SessionError::Unavailable)?;
     Ok(id)
 }

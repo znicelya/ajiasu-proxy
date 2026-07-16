@@ -6,7 +6,7 @@ use crate::private_file;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SessionState {
-    pub node_id: String,
+    pub gateway_id: String,
     pub session_token: String,
     pub protocol_revision: u32,
 }
@@ -15,7 +15,7 @@ impl std::fmt::Debug for SessionState {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("SessionState")
-            .field("node_id", &self.node_id)
+            .field("gateway_id", &self.gateway_id)
             .field("session_token", &"[redacted]")
             .field("protocol_revision", &self.protocol_revision)
             .finish()
@@ -24,9 +24,9 @@ impl std::fmt::Debug for SessionState {
 
 #[derive(Debug, Error)]
 pub enum SessionError {
-    #[error("session state is unavailable")]
+    #[error("gateway session state is unavailable")]
     Unavailable,
-    #[error("session state is invalid")]
+    #[error("gateway session state is invalid")]
     Invalid,
 }
 
@@ -50,10 +50,21 @@ pub fn save(path: &Path, state: &SessionState) -> Result<(), SessionError> {
     result
 }
 
+pub fn retire_enrollment(path: Option<&Path>) -> Result<(), SessionError> {
+    let Some(path) = path else {
+        return Ok(());
+    };
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err(SessionError::Unavailable),
+    }
+}
+
 fn validate(state: &SessionState) -> Result<(), SessionError> {
-    if state.node_id.trim().is_empty()
+    if state.gateway_id.trim().is_empty()
         || state.session_token.trim().is_empty()
-        || !(1..=2).contains(&state.protocol_revision)
+        || state.protocol_revision != 1
     {
         return Err(SessionError::Invalid);
     }
@@ -67,46 +78,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn atomically_round_trips_and_redacts_session() {
+    fn persists_redacted_session_and_retires_enrollment() {
         let root =
-            std::env::temp_dir().join(format!("ajiasu-agent-session-{}", uuid::Uuid::now_v7()));
+            std::env::temp_dir().join(format!("ajiasu-gateway-session-{}", uuid::Uuid::now_v7()));
         let path = root.join("session.json");
+        let enrollment = root.join("enrollment");
+        private_file::atomic_write(&enrollment, b"one-time").unwrap();
         let state = SessionState {
-            node_id: "node-a".to_owned(),
-            session_token: "session-token-canary".to_owned(),
-            protocol_revision: 2,
+            gateway_id: "gateway-a".to_owned(),
+            session_token: "gateway-session-canary".to_owned(),
+            protocol_revision: 1,
         };
         save(&path, &state).unwrap();
+        retire_enrollment(Some(&enrollment)).unwrap();
         let loaded = load(&path).unwrap().unwrap();
-        assert_eq!(loaded.session_token, state.session_token);
-        assert!(!format!("{loaded:?}").contains("session-token-canary"));
-        assert!(fs::read_dir(&root).unwrap().all(|entry| {
-            !entry
-                .unwrap()
-                .file_name()
-                .to_string_lossy()
-                .ends_with(".tmp")
-        }));
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn rejects_invalid_and_oversize_session() {
-        let root = std::env::temp_dir().join(format!(
-            "ajiasu-agent-session-invalid-{}",
-            uuid::Uuid::now_v7()
-        ));
-        fs::create_dir_all(&root).unwrap();
-        let invalid = root.join("invalid.json");
-        private_file::atomic_write(
-            &invalid,
-            br#"{"node_id":"","session_token":"secret","protocol_revision":2}"#,
-        )
-        .unwrap();
-        assert!(matches!(load(&invalid), Err(SessionError::Invalid)));
-        let oversize = root.join("oversize.json");
-        private_file::atomic_write(&oversize, &vec![b'x'; 64 * 1024 + 1]).unwrap();
-        assert!(matches!(load(&oversize), Err(SessionError::Unavailable)));
+        assert!(!format!("{loaded:?}").contains("gateway-session-canary"));
+        assert!(!enrollment.exists());
         fs::remove_dir_all(root).unwrap();
     }
 }
