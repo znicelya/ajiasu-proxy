@@ -34,7 +34,7 @@ future Helm package.
   `9090/tcp` and Gateway gRPC `9091/tcp`; dependency ports are never published
   by a production profile.
 - Production secret files use fixed mounts below `/run/secrets/ajiasu/`:
-  `database-normal-dsn`, `database-platform-dsn`, `redis-password`,
+  `database-normal-dsn`, `database-platform-dsn`, `database-migration-dsn`, `redis-password`,
   `oidc-client-secret`, `control-plane-keyring`, `agent-enrollment-token`, and
   `gateway-enrollment-token`. Secret values and secret-bearing DSNs are not
   Compose variables, command arguments, image metadata, or committed defaults.

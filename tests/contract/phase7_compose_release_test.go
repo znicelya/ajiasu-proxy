@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const phase7Revision1SHA256 = "db9865b85dba1254fe4a6f1bd683c679fca51c38adc15978f6f09426d8e97bc6"
+const phase7Revision1SHA256 = "d44215fe88fe10b78aa67396ad54dae750f36f666ea3c0729541521d7b328e04"
 
 type configurationMatrix struct {
 	Revision        int                   `yaml:"revision"`
@@ -147,6 +147,7 @@ func TestPhase7ConfigurationMatrixGoldenContract(t *testing.T) {
 		"AJIASU_GATEWAY_GRPC_BIND":              "control-plane",
 		"AJIASU_DATABASE_NORMAL_DSN_FILE":       "control-plane",
 		"AJIASU_DATABASE_PLATFORM_DSN_FILE":     "control-plane",
+		"AJIASU_DATABASE_MIGRATION_DSN_FILE":    "lifecycle",
 		"AJIASU_REDIS_PASSWORD_FILE":            "control-plane",
 		"AJIASU_OIDC_CLIENT_SECRET_FILE":        "control-plane",
 		"AJIASU_KEYRING_FILE":                   "control-plane",

@@ -98,7 +98,7 @@
         },
         "secret_mounts": {
           "type": "array",
-          "minItems": 7,
+          "minItems": 8,
           "uniqueItems": true,
           "items": {
             "type": "string",

@@ -59,6 +59,7 @@
     "secret_mounts": [
       "/run/secrets/ajiasu/database-normal-dsn",
       "/run/secrets/ajiasu/database-platform-dsn",
+      "/run/secrets/ajiasu/database-migration-dsn",
       "/run/secrets/ajiasu/redis-password",
       "/run/secrets/ajiasu/oidc-client-secret",
       "/run/secrets/ajiasu/control-plane-keyring",

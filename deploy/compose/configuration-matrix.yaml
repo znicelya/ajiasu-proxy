@@ -59,6 +59,13 @@ configurations:
     default_policy: required_secret_file
     modes: [development, single-host, external-dependencies]
     helm_value: controlPlane.database.platformDsnSecretKey
+  - name: AJIASU_DATABASE_MIGRATION_DSN_FILE
+    owner: lifecycle
+    container_environment: AJIASU_DATABASE_MIGRATION_DSN_FILE
+    secret_mount: /run/secrets/ajiasu/database-migration-dsn
+    default_policy: required_secret_file
+    modes: [development, single-host, external-dependencies]
+    helm_value: migrations.databaseDsnSecretKey
   - name: AJIASU_REDIS_PASSWORD_FILE
     owner: control-plane
     container_environment: AJIASU_REDIS_PASSWORD_FILE
