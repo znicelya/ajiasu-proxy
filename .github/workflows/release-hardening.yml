@@ -1,0 +1,45 @@
+name: release-hardening
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        with: { go-version-file: go.mod }
+      - name: Run release contract tests
+        shell: pwsh
+        run: ./tests/release/contract.ps1
+      - name: Run Go and Rust verification
+        shell: bash
+        run: |
+          go test ./...
+          cargo test --workspace --locked
+
+  artifact-contract:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with: { persist-credentials: false }
+      - name: Validate release policy and compatibility inputs
+        shell: pwsh
+        run: |
+          Get-Content build/compatibility-matrix.yaml | Out-Null
+          Get-Content build/release-policy.yaml | Out-Null
+          ./tests/release/contract.ps1
+      - name: Publish signed artifact placeholder contract
+        run: echo "Release workflow requires the protected image build/sign/SBOM job before publication."

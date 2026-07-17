@@ -1,0 +1,17 @@
+matrix_revision: 1
+release_line: "0.9"
+schema_versions: [11]
+protocols:
+  agent: { current: 2, previous_supported: 2 }
+  gateway: { current: 1, previous_supported: 1 }
+  relay: { current: 1, previous_supported: 1 }
+  scheduler: { current: 1, previous_supported: 1 }
+packages:
+  compose: { configuration_revision: 1, supported: true }
+  helm: { chart_revision: 1, supported_kubernetes: ">=1.27" }
+upgrade:
+  control_plane_zero_downtime: true
+  database_migration_before_readiness: true
+  mixed_schema_versions: false
+  rollback_requires_backup: true
+architectures: [linux/amd64, linux/arm64]
