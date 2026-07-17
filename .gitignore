@@ -16,3 +16,5 @@ target/
 deploy/compose/generated/
 deploy/compose/*.local.yaml
 deploy/compose/env/*.local
+*/node_modules/*
+*/node_modules
