@@ -1,0 +1,9 @@
+global:
+  environment: external-dependencies
+  environmentId: phase8-previous
+  releaseManifest: previous-manifest
+postgres: { external: { host: postgres.previous.test, port: 5432, database: ajiasu } }
+redis: { external: { host: redis.previous.test, port: 6379 } }
+secrets: { existingSecret: ajiasu-runtime }
+gateway:
+  config: { certificateFingerprint: previous-fingerprint }

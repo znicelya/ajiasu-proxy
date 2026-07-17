@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-runner-pod-template
+  labels: { app.kubernetes.io/component: runner-template }
+data:
+  pod-template.yaml: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      generateName: ajiasu-runner-
+      labels:
+        app.kubernetes.io/name: {{ include "ajiasu.name" . }}
+        app.kubernetes.io/component: runner
+        ajiasu.io/managed-by: agent
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+      - name: runner
+        image: {{ include "ajiasu.image" .Values.images.runner }}
+        imagePullPolicy: {{ .Values.images.pullPolicy }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: { drop: [ALL] }
+        resources:
+{{ toYaml .Values.runner.resources | indent 10 }}
+        volumeMounts:
+        - { name: runtime, mountPath: /run/ajiasu }
+        - { name: tmp, mountPath: /tmp }
+      volumes:
+      - { name: runtime, emptyDir: { medium: Memory, sizeLimit: 16Mi } }
+      - { name: tmp, emptyDir: { medium: Memory, sizeLimit: 16Mi } }

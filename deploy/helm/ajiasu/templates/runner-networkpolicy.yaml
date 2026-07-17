@@ -1,0 +1,9 @@
+{{- if .Values.security.networkPolicy }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-runner-isolation
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/component: runner } }
+  policyTypes: [Ingress, Egress]
+{{- end }}

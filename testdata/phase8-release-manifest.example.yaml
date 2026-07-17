@@ -1,0 +1,10 @@
+release: phase8-example
+chart_revision: 1
+configuration_revision: 1
+schema_version: 11
+protocols: { agent: 2, gateway: 1, relay: 1, scheduler: 1 }
+images:
+  control_plane: ghcr.io/ajiasu/control-plane@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  gateway: ghcr.io/ajiasu/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  agent: ghcr.io/ajiasu/agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  runner: ghcr.io/ajiasu/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

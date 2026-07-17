@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-config
+  labels:
+    {{- include "ajiasu.labels" . | nindent 4 }}
+data:
+  AJIASU_ENVIRONMENT: {{ .Values.global.environment | quote }}
+  AJIASU_ENVIRONMENT_ID: {{ default .Release.Name .Values.global.environmentId | quote }}
+  AJIASU_RELEASE_MANIFEST: {{ .Values.global.releaseManifest | quote }}

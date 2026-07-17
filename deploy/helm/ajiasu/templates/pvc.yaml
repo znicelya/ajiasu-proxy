@@ -1,0 +1,13 @@
+{{- if .Values.gateway.statePersistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-gateway-state
+  labels: { app.kubernetes.io/component: gateway }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: {{ .Values.gateway.statePersistence.size }} } }
+  {{- with .Values.gateway.statePersistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}

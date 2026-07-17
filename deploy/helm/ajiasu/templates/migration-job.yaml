@@ -1,0 +1,30 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-migrate
+  labels: { app.kubernetes.io/component: migration }
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata: { labels: { app.kubernetes.io/name: {{ include "ajiasu.name" . }}, app.kubernetes.io/component: migration } }
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "ajiasu.fullname" . }}-control-plane
+      automountServiceAccountToken: false
+      containers:
+      - name: migration
+        image: {{ include "ajiasu.image" .Values.migrations.image }}
+        args: ["migrate", "up"]
+        envFrom: [{ configMapRef: { name: {{ include "ajiasu.fullname" . }}-config } }]
+        env:
+        - { name: AJIASU_DATABASE_MIGRATION_DSN_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.databaseMigrationDsn }} }
+        volumeMounts: [{ name: secrets, mountPath: /run/secrets/ajiasu, readOnly: true }]
+        securityContext:
+          {{- include "ajiasu.containerSecurityContext" . | nindent 10 }}
+      volumes: [{ name: secrets, secret: { secretName: {{ .Values.secrets.existingSecret | quote }} } }]
+{{- end }}

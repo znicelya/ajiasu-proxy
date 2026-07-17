@@ -1,0 +1,29 @@
+{{- if .Values.bootstrap.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-bootstrap
+  labels: { app.kubernetes.io/component: bootstrap }
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata: { labels: { app.kubernetes.io/name: {{ include "ajiasu.name" . }}, app.kubernetes.io/component: bootstrap } }
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+      - name: bootstrap
+        image: {{ include "ajiasu.image" .Values.images.controlPlane }}
+        args: ["bootstrap", "--non-interactive"]
+        env:
+        - name: AJIASU_BOOTSTRAP_TOKEN_FILE
+          value: /run/secrets/ajiasu/{{ .Values.bootstrap.tokenSecretKey }}
+        volumeMounts: [{ name: secrets, mountPath: /run/secrets/ajiasu, readOnly: true }]
+        securityContext:
+          {{- include "ajiasu.containerSecurityContext" . | nindent 10 }}
+      volumes: [{ name: secrets, secret: { secretName: {{ .Values.secrets.existingSecret | quote }} } }]
+{{- end }}

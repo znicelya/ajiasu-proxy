@@ -1,0 +1,11 @@
+{{- if eq .Values.global.environment "external-dependencies" }}
+{{- if .Values.dependencies.bundled }}{{ fail "bundled dependencies are forbidden in external-dependencies production mode" }}{{ end }}
+{{- if not .Values.postgres.external.host }}{{ fail "postgres.external.host is required" }}{{ end }}
+{{- if not .Values.redis.external.host }}{{ fail "redis.external.host is required" }}{{ end }}
+{{- end }}
+{{- if and .Values.gateway.exactAggregateLimits (gt (int .Values.gateway.replicas) 1) }}
+{{- fail "gateway.replicas must be 1 while exactAggregateLimits is enabled" }}
+{{- end }}
+{{- if not .Values.gateway.config.certificateFingerprint }}
+{{- fail "gateway.config.certificateFingerprint is required" }}
+{{- end }}

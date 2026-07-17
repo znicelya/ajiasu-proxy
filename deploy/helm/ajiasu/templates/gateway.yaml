@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-gateway
+  labels: { app.kubernetes.io/component: gateway }
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  strategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  selector: { matchLabels: { app.kubernetes.io/name: {{ include "ajiasu.name" . }}, app.kubernetes.io/component: gateway } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: {{ include "ajiasu.name" . }}, app.kubernetes.io/component: gateway } }
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      {{- if .Values.gateway.topologySpread }}
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector: { matchLabels: { app.kubernetes.io/name: {{ include "ajiasu.name" . }}, app.kubernetes.io/component: gateway } }
+      {{- end }}
+      containers:
+      - name: gateway
+        image: {{ include "ajiasu.image" .Values.images.gateway }}
+        imagePullPolicy: {{ .Values.images.pullPolicy }}
+        envFrom: [{ configMapRef: { name: {{ include "ajiasu.fullname" . }}-config } }]
+        env:
+        - { name: AJIASU_GATEWAY_NAME, value: {{ .Values.gateway.config.name | quote }} }
+        - { name: AJIASU_GATEWAY_HTTP_LISTEN, value: {{ .Values.gateway.config.httpListen | quote }} }
+        - { name: AJIASU_GATEWAY_SOCKS5_LISTEN, value: {{ .Values.gateway.config.socks5Listen | quote }} }
+        - { name: AJIASU_GATEWAY_STATE_DIRECTORY, value: {{ .Values.gateway.config.stateDirectory | quote }} }
+        - { name: AJIASU_GATEWAY_CONTROL_PLANE_ENDPOINT, value: {{ printf "https://%s-control-plane:%v" (include "ajiasu.fullname" .) .Values.controlPlane.service.gatewayGrpcPort | quote }} }
+        - { name: AJIASU_GATEWAY_RELAY_ENDPOINT, value: {{ printf "https://%s-agent:%v" (include "ajiasu.fullname" .) 9092 | quote }} }
+        - { name: AJIASU_GATEWAY_CERTIFICATE_FINGERPRINT, value: {{ .Values.gateway.config.certificateFingerprint | quote }} }
+        - { name: AJIASU_GATEWAY_ROUTE_VERIFYING_KEY_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.routeVerifyingKey }} }
+        - { name: AJIASU_GATEWAY_CA_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.gatewayCa }} }
+        - { name: AJIASU_GATEWAY_CERT_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.gatewayCert }} }
+        - { name: AJIASU_GATEWAY_KEY_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.gatewayKey }} }
+        - { name: AJIASU_GATEWAY_MAX_HEADER_BYTES, value: {{ .Values.gateway.config.maxHeaderBytes | quote }} }
+        - { name: AJIASU_GATEWAY_MAX_CONNECTIONS, value: {{ .Values.gateway.config.maxConnections | quote }} }
+        - { name: AJIASU_GATEWAY_SHUTDOWN_TIMEOUT, value: {{ .Values.gateway.config.shutdownTimeout | quote }} }
+        ports: [{ name: proxy-http, containerPort: 8080 }, { name: proxy-socks, containerPort: 1080 }]
+        readinessProbe: { exec: { command: ["/usr/local/bin/ajiasu-gateway", "health", "ready"] }, periodSeconds: 10, failureThreshold: 6 }
+        livenessProbe: { exec: { command: ["/usr/local/bin/ajiasu-gateway", "health", "live"] }, periodSeconds: 20 }
+        resources: {{- toYaml .Values.gateway.resources | nindent 10 }}
+        securityContext:
+          {{- include "ajiasu.containerSecurityContext" . | nindent 10 }}
+        lifecycle: { preStop: { exec: { command: ["/bin/sh", "-c", "sleep 5"] } } }
+        volumeMounts:
+        - { name: secrets, mountPath: /run/secrets/ajiasu, readOnly: true }
+        - { name: state, mountPath: /var/lib/ajiasu-gateway }
+      volumes:
+      - { name: secrets, secret: { secretName: {{ .Values.secrets.existingSecret | quote }} } }
+      - name: state
+        {{- if .Values.gateway.statePersistence.enabled }}
+        persistentVolumeClaim: { claimName: {{ include "ajiasu.fullname" . }}-gateway-state }
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-gateway
+spec:
+  type: {{ .Values.exposure.gateway }}
+  selector: { app.kubernetes.io/name: {{ include "ajiasu.name" . }}, app.kubernetes.io/component: gateway }
+  ports: [{ name: proxy-http, port: {{ .Values.gateway.service.httpPort }}, targetPort: proxy-http }, { name: proxy-socks, port: {{ .Values.gateway.service.socksPort }}, targetPort: proxy-socks }]

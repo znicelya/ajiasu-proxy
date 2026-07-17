@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-agent
+  labels: { app.kubernetes.io/component: agent }
+spec:
+  updateStrategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 1 } }
+  selector: { matchLabels: { app.kubernetes.io/name: {{ include "ajiasu.name" . }}, app.kubernetes.io/component: agent } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: {{ include "ajiasu.name" . }}, app.kubernetes.io/component: agent } }
+    spec:
+      serviceAccountName: {{ include "ajiasu.fullname" . }}-agent
+      terminationGracePeriodSeconds: 90
+      containers:
+      - name: agent
+        image: {{ include "ajiasu.image" .Values.images.agent }}
+        imagePullPolicy: {{ .Values.images.pullPolicy }}
+        envFrom: [{ configMapRef: { name: {{ include "ajiasu.fullname" . }}-config } }]
+        env:
+        - name: AJIASU_AGENT_NODE_NAME
+          valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+        - { name: AJIASU_AGENT_CONTROL_PLANE_ENDPOINT, value: {{ printf "https://%s-control-plane:%v" (include "ajiasu.fullname" .) .Values.controlPlane.service.agentGrpcPort | quote }} }
+        - { name: AJIASU_AGENT_STATE_DIRECTORY, value: {{ .Values.agent.config.stateDirectory | quote }} }
+        - { name: AJIASU_AGENT_RUNNER_IMAGE, value: {{ include "ajiasu.image" .Values.images.runner | quote }} }
+        - { name: AJIASU_AGENT_RUNTIME, value: {{ .Values.agent.config.runtime | quote }} }
+        - { name: AJIASU_AGENT_RELAY_BIND, value: {{ .Values.agent.config.relayBind | quote }} }
+        - { name: AJIASU_AGENT_RELAY_DIRECTORY, value: {{ .Values.agent.config.relayDirectory | quote }} }
+        - { name: AJIASU_AGENT_SHUTDOWN_TIMEOUT, value: {{ .Values.agent.config.shutdownTimeout | quote }} }
+        - { name: AJIASU_DOCKER_SOCKET, value: {{ .Values.agent.runtimeSocket | quote }} }
+        - { name: AJIASU_AGENT_ROUTE_VERIFYING_KEY_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.routeVerifyingKey }} }
+        - { name: AJIASU_AGENT_CA_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.agentCa }} }
+        - { name: AJIASU_AGENT_CERT_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.agentCert }} }
+        - { name: AJIASU_AGENT_KEY_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.agentKey }} }
+        - { name: AJIASU_AGENT_RELAY_CERT_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.agentRelayCert }} }
+        - { name: AJIASU_AGENT_RELAY_KEY_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.agentRelayKey }} }
+        - { name: AJIASU_AGENT_RELAY_CLIENT_CA_FILE, value: /run/secrets/ajiasu/{{ .Values.secrets.keys.agentRelayCa }} }
+        - { name: AJIASU_AGENT_VERSION, value: {{ .Chart.AppVersion | quote }} }
+        ports: [{ name: relay, containerPort: 9092 }]
+        volumeMounts:
+        - { name: runtime-socket, mountPath: /var/run/docker.sock }
+        - { name: secrets, mountPath: /run/secrets/ajiasu, readOnly: true }
+        - { name: state, mountPath: /var/lib/ajiasu-agent }
+        readinessProbe: { exec: { command: ["/usr/local/bin/ajiasu-agent", "health", "ready"] }, periodSeconds: 10, failureThreshold: 6 }
+        livenessProbe: { exec: { command: ["/usr/local/bin/ajiasu-agent", "health", "live"] }, periodSeconds: 20 }
+        resources: {{- toYaml .Values.agent.resources | nindent 10 }}
+        securityContext:
+          {{- include "ajiasu.containerSecurityContext" . | nindent 10 }}
+      volumes:
+      - { name: runtime-socket, hostPath: { path: {{ .Values.agent.runtimeSocket | quote }}, type: Socket } }
+      - { name: secrets, secret: { secretName: {{ .Values.secrets.existingSecret | quote }} } }
+      - { name: state, hostPath: { path: /var/lib/ajiasu-agent, type: DirectoryOrCreate } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-agent
+  labels: { app.kubernetes.io/component: agent }
+spec:
+  type: ClusterIP
+  selector: { app.kubernetes.io/name: {{ include "ajiasu.name" . }}, app.kubernetes.io/component: agent }
+  ports: [{ name: relay, port: 9092, targetPort: 9092 }]

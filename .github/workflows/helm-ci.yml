@@ -1,0 +1,48 @@
+name: helm-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: helm-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chart-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with: { persist-credentials: false }
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with: { version: v3.17.3 }
+      - name: Render and inspect chart
+        shell: pwsh
+        run: ./tests/helm/run.ps1
+      - name: Run Phase 8 contract tests
+        shell: pwsh
+        run: go test ./tests/contract -run Phase8 -count=1
+
+  disposable-cluster:
+    if: github.event_name == 'push'
+    needs: chart-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with: { persist-credentials: false }
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with: { version: v3.17.3 }
+      - name: Set up Kind
+        uses: helm/kind-action@v1.12.0
+        with: { cluster_name: ajiasu-phase8 }
+      - name: Run Kubernetes server-side gate
+        shell: pwsh
+        run: ./tests/helm/run.ps1 -Cluster

@@ -1,0 +1,14 @@
+global:
+  environment: external-dependencies
+  environmentId: replace-with-generated-environment-id
+  releaseManifest: replace-with-reviewed-manifest-id
+postgres:
+  external: { host: postgres.example.internal, port: 5432, database: ajiasu }
+redis:
+  external: { host: redis.example.internal, port: 6379 }
+secrets:
+  existingSecret: ajiasu-runtime
+gateway:
+  config:
+    certificateFingerprint: replace-with-gateway-certificate-fingerprint
+dependencies: { bundled: false }

@@ -1,0 +1,51 @@
+{{- if .Values.security.networkPolicy }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-default-deny
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-control-plane
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/component: control-plane } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from: [{ podSelector: { matchLabels: { app.kubernetes.io/component: gateway } } }, { podSelector: { matchLabels: { app.kubernetes.io/component: agent } } }]
+    ports: [{ protocol: TCP, port: 8080 }, { protocol: TCP, port: 9090 }, { protocol: TCP, port: 9091 }]
+  egress:
+  - to: [{ podSelector: { matchLabels: { app.kubernetes.io/component: postgres } } }, { podSelector: { matchLabels: { app.kubernetes.io/component: redis } } }]
+  - to: [{ namespaceSelector: {} }]
+    ports: [{ protocol: TCP, port: 5432 }, { protocol: TCP, port: 6379 }, { protocol: TCP, port: 443 }, { protocol: TCP, port: 53 }, { protocol: UDP, port: 53 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-gateway
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/component: gateway } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - ports: [{ protocol: TCP, port: 8080 }, { protocol: TCP, port: 1080 }, { protocol: TCP, port: 8445 }]
+  egress:
+  - to: [{ podSelector: { matchLabels: { app.kubernetes.io/component: control-plane } } }]
+    ports: [{ protocol: TCP, port: 9091 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ajiasu.fullname" . }}-agent
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/component: agent } }
+  policyTypes: [Ingress, Egress]
+  egress:
+  - to: [{ podSelector: { matchLabels: { app.kubernetes.io/component: control-plane } } }]
+    ports: [{ protocol: TCP, port: 9090 }]
+  ingress:
+  - from: [{ podSelector: { matchLabels: { app.kubernetes.io/component: gateway } } }]
+    ports: [{ protocol: TCP, port: 9092 }]
+{{- end }}

@@ -1,0 +1,13 @@
+chart_revision: 1
+configuration_revision: 1
+current:
+  schema_version: 11
+  protocols: { agent: 2, gateway: 1, relay: 1, scheduler: 1 }
+previous:
+  schema_version: 11
+  protocols: { agent: 2, gateway: 1, relay: 1, scheduler: 1 }
+upgrade_policy:
+  max_unavailable_control_plane: 0
+  migration_hook_required: true
+  redis_loss_blocks_new_pool_allocations: true
+  rollback_requires_backup: true

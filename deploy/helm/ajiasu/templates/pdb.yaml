@@ -1,0 +1,17 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: {{ include "ajiasu.fullname" . }}-control-plane }
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector: { matchLabels: { app.kubernetes.io/name: {{ include "ajiasu.name" . }}, app.kubernetes.io/component: control-plane } }
+{{- if gt (int .Values.gateway.replicas) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: {{ include "ajiasu.fullname" . }}-gateway }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app.kubernetes.io/name: {{ include "ajiasu.name" . }}, app.kubernetes.io/component: gateway } }
+{{- end }}
+{{- end }}

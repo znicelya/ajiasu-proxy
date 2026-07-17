@@ -1,0 +1,69 @@
+global:
+  environment: external-dependencies
+  environmentId: ""
+  releaseManifest: ""
+  imagePullSecrets: []
+images:
+  controlPlane: { repository: ghcr.io/ajiasu/control-plane, digest: "" }
+  gateway: { repository: ghcr.io/ajiasu/gateway, digest: "" }
+  agent: { repository: ghcr.io/ajiasu/agent, digest: "" }
+  runner: { repository: ghcr.io/ajiasu/runner, digest: "" }
+  pullPolicy: IfNotPresent
+controlPlane:
+  replicas: 2
+  service: { port: 8080, agentGrpcPort: 9090, gatewayGrpcPort: 9091 }
+  resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
+  topologySpread: true
+  config:
+    agentGrpcBind: 0.0.0.0:9090
+    gatewayGrpcBind: 0.0.0.0:9091
+    redisUsername: scheduler
+    redisDatabase: "0"
+    redisTls: "true"
+    oidcIssuer: https://issuer.example.invalid
+    oidcClientId: control-plane
+    oidcRedirectUrl: https://proxy.example.invalid/callback
+gateway:
+  replicas: 1
+  exactAggregateLimits: true
+  service: { httpPort: 8080, socksPort: 1080 }
+  resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 1, memory: 512Mi } }
+  topologySpread: true
+  config:
+    name: gateway
+    certificateFingerprint: ""
+    httpListen: 0.0.0.0:8080
+    socks5Listen: 0.0.0.0:1080
+    stateDirectory: /var/lib/ajiasu-gateway
+    maxHeaderBytes: "65536"
+    maxConnections: "1000"
+    shutdownTimeout: 30s
+  statePersistence: { enabled: true, size: 1Gi, storageClass: "" }
+agent:
+  resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 1, memory: 512Mi } }
+  runtimeSocket: /var/run/docker.sock
+  config:
+    runtime: docker
+    nodeName: ""
+    stateDirectory: /var/lib/ajiasu-agent
+    relayBind: 0.0.0.0:9092
+    relayDirectory: /var/lib/ajiasu-agent/relay
+    shutdownTimeout: 30s
+  statePersistence: { enabled: true, size: 1Gi, storageClass: "" }
+runner:
+  resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 1, memory: 512Mi } }
+postgres: { external: { host: "", port: 5432, database: ajiasu } }
+redis: { external: { host: "", port: 6379 } }
+secrets:
+  existingSecret: ""
+  keys: { databaseNormalDsn: database-normal-dsn, databasePlatformDsn: database-platform-dsn, databaseMigrationDsn: database-migration-dsn, redisPassword: redis-password, oidcClientSecret: oidc-client-secret, keyring: control-plane-keyring, routeSigningKey: route-signing-key, routeVerifyingKey: route-verifying-key, controlPlaneCa: platform-ca, controlPlaneCert: control-plane-cert, controlPlaneKey: control-plane-key, gatewayCa: platform-ca, gatewayCert: gateway-cert, gatewayKey: gateway-key, agentCa: platform-ca, agentCert: agent-cert, agentKey: agent-key, agentRelayCert: agent-relay-cert, agentRelayKey: agent-relay-key, agentRelayCa: platform-ca }
+security: { networkPolicy: true, podSecurity: true }
+serviceAccount: { create: true }
+podDisruptionBudget: { enabled: true, minAvailable: 1 }
+migrations: { enabled: true, image: { repository: ghcr.io/ajiasu/control-plane, digest: "" } }
+bootstrap: { enabled: false, tokenSecretKey: bootstrap-token }
+dependencies: { bundled: false }
+exposure: { gateway: ClusterIP, controlPlane: ClusterIP }
+nodeSelector: {}
+tolerations: []
+affinity: {}
