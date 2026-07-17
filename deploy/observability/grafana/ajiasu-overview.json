@@ -1,0 +1,15 @@
+{
+  "title": "AJiaSu Control Room",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["ajiasu", "phase9"],
+  "timezone": "utc",
+  "templating": { "list": [] },
+  "panels": [
+    { "id": 1, "type": "timeseries", "title": "HTTP request rate", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "targets": [{ "expr": "ajiasu:http_request_rate5m", "legendFormat": "{{component}}" }], "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 } },
+    { "id": 2, "type": "timeseries", "title": "P95 latency", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "targets": [{ "expr": "ajiasu:http_latency_p95", "legendFormat": "{{component}}" }], "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 } },
+    { "id": 3, "type": "stat", "title": "HTTP error rate", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "targets": [{ "expr": "sum(ajiasu:http_error_rate5m) / clamp_min(sum(ajiasu:http_request_rate5m), 1)" }], "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 } },
+    { "id": 4, "type": "stat", "title": "Backup age", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "targets": [{ "expr": "time() - ajiasu_backup_last_success_timestamp_seconds" }], "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 } },
+    { "id": 5, "type": "stat", "title": "Redis degraded", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "targets": [{ "expr": "max(ajiasu_scheduler_redis_degraded)" }], "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 } }
+  ]
+}

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/dnomd343/ajiasu-proxy/internal/observability"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -35,7 +36,9 @@ func NewRouter(deps Dependencies) http.Handler {
 	router.Use(clientIPMiddleware)
 	router.Use(recoveryMiddleware(logger))
 	router.Use(accessLogMiddleware(logger))
+	router.Use(observability.Middleware)
 	router.Use(bodyLimitMiddleware)
+	router.Handle("/metrics", observability.Handler())
 	router.Get("/livez", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})

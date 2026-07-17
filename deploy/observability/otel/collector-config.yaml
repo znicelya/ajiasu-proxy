@@ -1,0 +1,25 @@
+receivers:
+  otlp:
+    protocols:
+      grpc: { endpoint: 0.0.0.0:4317 }
+      http: { endpoint: 0.0.0.0:4318 }
+processors:
+  batch: { timeout: 5s, send_batch_size: 512 }
+  attributes/redact:
+    actions:
+    - { key: http.request.header.authorization, action: delete }
+    - { key: db.statement, action: delete }
+    - { key: ajiasu.proxy.target, action: delete }
+exporters:
+  otlphttp:
+    endpoint: ${env:AJIASU_OTEL_EXPORT_ENDPOINT}
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [attributes/redact, batch]
+      exporters: [otlphttp]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp]

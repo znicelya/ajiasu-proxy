@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ajiasu-recording
+  labels: { app.kubernetes.io/part-of: ajiasu, role: recording }
+spec:
+  groups:
+  - name: ajiasu.control-plane.recording
+    interval: 30s
+    rules:
+    - record: ajiasu:http_request_rate5m
+      expr: sum by (component) (rate(ajiasu_http_requests_total[5m]))
+    - record: ajiasu:http_error_rate5m
+      expr: sum by (component) (rate(ajiasu_http_requests_total{status=~"5.."}[5m]))
+    - record: ajiasu:http_latency_p95
+      expr: histogram_quantile(0.95, sum by (component, le) (rate(ajiasu_http_request_duration_seconds_bucket[5m])))

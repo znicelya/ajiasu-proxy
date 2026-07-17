@@ -1,0 +1,34 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ajiasu-alerts
+  labels: { app.kubernetes.io/part-of: ajiasu, role: alert }
+spec:
+  groups:
+  - name: ajiasu.control-plane
+    rules:
+    - alert: AJiaSuControlPlaneNotReady
+      expr: up{job=~".*ajiasu.*"} == 0
+      for: 5m
+      labels: { severity: critical }
+      annotations: { summary: AJiaSu control-plane target is unavailable, runbook: docs/operations/phase9-runbooks.md#readiness }
+    - alert: AJiaSuHTTPErrorBudgetBurn
+      expr: (ajiasu:http_error_rate5m / clamp_min(ajiasu:http_request_rate5m, 1)) > 0.05
+      for: 10m
+      labels: { severity: warning }
+      annotations: { summary: HTTP error rate exceeds 5 percent, runbook: docs/operations/phase9-runbooks.md#http-errors }
+    - alert: AJiaSuLeaseContention
+      expr: increase(ajiasu_scheduler_lease_contention_total[10m]) > 20
+      for: 10m
+      labels: { severity: warning }
+      annotations: { summary: Scheduler lease contention is elevated, runbook: docs/operations/phase9-runbooks.md#lease-contention }
+    - alert: AJiaSuRedisDegraded
+      expr: max(ajiasu_scheduler_redis_degraded) > 0
+      for: 2m
+      labels: { severity: critical }
+      annotations: { summary: Redis degraded mode is active, runbook: docs/operations/phase9-runbooks.md#redis }
+    - alert: AJiaSuBackupStale
+      expr: time() - ajiasu_backup_last_success_timestamp_seconds > 86400
+      for: 30m
+      labels: { severity: critical }
+      annotations: { summary: Backup evidence is older than 24 hours, runbook: docs/operations/phase9-runbooks.md#backup }
