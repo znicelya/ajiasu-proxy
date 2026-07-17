@@ -14,7 +14,7 @@ func TestPhase7ComposeImageLock(t *testing.T) {
 	root := phase7RepositoryRoot(t)
 	content := strings.ReplaceAll(string(readPhase7File(t, filepath.Join(root, "build", "compose-images.lock"))), "\r\n", "\n")
 	lines := strings.Split(strings.TrimSpace(content), "\n")
-	want := []string{"GO_BUILD_IMAGE", "KEYCLOAK_IMAGE", "POSTGRES_IMAGE", "REDIS_IMAGE", "RUNTIME_IMAGE", "RUST_BUILD_IMAGE"}
+	want := []string{"GO_BUILD_IMAGE", "KEYCLOAK_IMAGE", "POSTGRES_IMAGE", "REDIS_IMAGE", "RUNTIME_IMAGE", "RUST_BUILD_IMAGE", "SBOM_SCANNER_IMAGE"}
 	got := make([]string, 0, len(lines))
 	pattern := regexp.MustCompile(`^([A-Z_]+)=([^\s:@]+(?:/[^\s:@]+)*:[^\s@]+)@sha256:([0-9a-f]{64})$`)
 	for _, line := range lines {
@@ -114,7 +114,7 @@ func TestPhase7SBOMInputsCoverReleaseImages(t *testing.T) {
 func TestPhase7ImageCIGeneratesSBOMAndProvenance(t *testing.T) {
 	root := phase7RepositoryRoot(t)
 	content := string(readPhase7File(t, filepath.Join(root, "scripts", "compose-image-ci.ps1")))
-	for _, required := range []string{"linux/amd64,linux/arm64", "type=sbom", "type=provenance,mode=max", "--pull=false", "Dockerfile.gateway", "Dockerfile.agent", "ALPINE_IMAGE=", "Dockerfile.fake-runner", "Dockerfile.fake-target", "trivy image", "--scanners vuln,secret", "docker history --no-trunc"} {
+	for _, required := range []string{"linux/amd64,linux/arm64", "type=sbom", "type=provenance,mode=max", "--pull=false", "Dockerfile.gateway", "Dockerfile.agent", "ALPINE_IMAGE=", "Dockerfile.fake-runner", "Dockerfile.fake-target", "Get-Command trivy", "& trivy @trivyArguments", "--image-src docker", "--scanners vuln,secret", "image scan failed after 3 attempts", "docker history --no-trunc"} {
 		if !strings.Contains(content, required) {
 			t.Errorf("compose image CI is missing %q", required)
 		}

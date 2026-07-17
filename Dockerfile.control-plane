@@ -7,6 +7,7 @@ FROM ${GO_BUILD_IMAGE} AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 COPY . .
+ARG GOPROXY=https://proxy.golang.org,direct
 ARG TARGETOS
 ARG TARGETARCH
 RUN --mount=type=cache,target=/go/pkg/mod \

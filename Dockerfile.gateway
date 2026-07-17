@@ -2,13 +2,20 @@
 ARG RUST_BUILD_IMAGE=rust:1.95-alpine3.23@sha256:606fd313a0f49743ee2a7bd49a0914bab7deedb12791f3a846a34a4711db7ed2
 ARG RUNTIME_IMAGE=alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
 FROM --platform=$TARGETPLATFORM ${RUST_BUILD_IMAGE} AS build
+ENV RUSTUP_TOOLCHAIN=1.95.0
+ENV CARGO_NET_RETRY=10
+ARG TARGETARCH
+ARG CARGO_REGISTRY_MIRROR
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates
 COPY api ./api
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/src/target \
-    cargo build --locked --release --package ajiasu-gateway \
+RUN --mount=type=cache,id=ajiasu-cargo-registry-${TARGETARCH},target=/usr/local/cargo/registry \
+    --mount=type=cache,id=ajiasu-gateway-target-${TARGETARCH},target=/src/target \
+    if [ -n "${CARGO_REGISTRY_MIRROR}" ]; then \
+      printf '[source.crates-io]\nreplace-with = "ajiasu-mirror"\n[source.ajiasu-mirror]\nregistry = "%s"\n' "${CARGO_REGISTRY_MIRROR}" > /usr/local/cargo/config.toml; \
+    fi \
+    && cargo build --locked --release --package ajiasu-gateway \
     && cp /src/target/release/ajiasu-gateway /tmp/ajiasu-gateway
 
 FROM ${RUNTIME_IMAGE}
