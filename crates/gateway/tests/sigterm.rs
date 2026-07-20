@@ -1,9 +1,13 @@
 #![cfg(unix)]
 
-use ajiasu_gateway::session::{self, SessionState};
+use ajiasu_gateway::{
+    private_file,
+    session::{self, SessionState},
+};
 use ed25519_dalek::SigningKey;
 use std::{
     fs,
+    io::Read,
     process::{Command, Stdio},
     thread,
     time::{Duration, Instant},
@@ -15,9 +19,9 @@ fn sigterm_completes_within_shutdown_deadline() {
         std::env::temp_dir().join(format!("ajiasu-gateway-sigterm-{}", uuid::Uuid::now_v7()));
     fs::create_dir_all(&root).unwrap();
     let verifying_key = root.join("route-verifying-key");
-    fs::write(
+    private_file::atomic_write(
         &verifying_key,
-        SigningKey::from_bytes(&[7; 32]).verifying_key().to_bytes(),
+        &SigningKey::from_bytes(&[7; 32]).verifying_key().to_bytes(),
     )
     .unwrap();
     session::save(
@@ -45,7 +49,7 @@ fn sigterm_completes_within_shutdown_deadline() {
         .env("AJIASU_GATEWAY_ROUTE_VERIFYING_KEY_FILE", &verifying_key)
         .env("AJIASU_GATEWAY_SHUTDOWN_TIMEOUT", "2s")
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .unwrap();
     thread::sleep(Duration::from_millis(200));
@@ -57,7 +61,17 @@ fn sigterm_completes_within_shutdown_deadline() {
     let deadline = Instant::now() + Duration::from_secs(4);
     loop {
         if let Some(status) = child.try_wait().unwrap() {
-            assert!(status.success(), "gateway exit status={status}");
+            let mut stderr = String::new();
+            child
+                .stderr
+                .take()
+                .unwrap()
+                .read_to_string(&mut stderr)
+                .unwrap();
+            assert!(
+                status.success(),
+                "gateway exit status={status}, stderr={stderr}"
+            );
             break;
         }
         assert!(
