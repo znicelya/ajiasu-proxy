@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/requestctx"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/requestctx"
 )
 
 type ErrorEnvelope struct {

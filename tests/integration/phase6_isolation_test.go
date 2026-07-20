@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/accounts"
-	"github.com/dnomd343/ajiasu-proxy/internal/audit"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/keyring"
-	"github.com/dnomd343/ajiasu-proxy/internal/secrets"
-	"github.com/dnomd343/ajiasu-proxy/internal/testkit"
+	"github.com/znicelya/ajiasu-proxy/internal/accounts"
+	"github.com/znicelya/ajiasu-proxy/internal/audit"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/keyring"
+	"github.com/znicelya/ajiasu-proxy/internal/secrets"
+	"github.com/znicelya/ajiasu-proxy/internal/testkit"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )

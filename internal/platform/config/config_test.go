@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/config"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/config"
 )
 
 func TestLoadRejectsMissingNormalDatabaseDSN(t *testing.T) {

@@ -3,7 +3,7 @@ package integration_test
 import (
 	"testing"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/testkit"
+	"github.com/znicelya/ajiasu-proxy/internal/testkit"
 )
 
 func TestPhase5SchemaMigratesAndForcesTenantRLS(t *testing.T) {

@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/audit"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/httpserver"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/keyring"
+	"github.com/znicelya/ajiasu-proxy/internal/audit"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/httpserver"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/keyring"
 	"github.com/google/uuid"
 )
 

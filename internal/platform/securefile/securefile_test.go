@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/securefile"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/securefile"
 )
 
 func TestReadRejectsUnsafeInputsWithoutExposingPath(t *testing.T) {

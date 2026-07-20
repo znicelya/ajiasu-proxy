@@ -1363,7 +1363,7 @@ const file_gateway_v1_gateway_proto_rawDesc = "" +
 	"reasonCode2\xd5\x01\n" +
 	"\x0eGatewayControl\x12h\n" +
 	"\x0fRegisterGateway\x12).ajiasu.gateway.v1.RegisterGatewayRequest\x1a*.ajiasu.gateway.v1.RegisterGatewayResponse\x12Y\n" +
-	"\rControlStream\x12!.ajiasu.gateway.v1.GatewayMessage\x1a!.ajiasu.gateway.v1.ControlMessage(\x010\x01BDZBgithub.com/dnomd343/ajiasu-proxy/internal/gen/gateway/v1;gatewayv1b\x06proto3"
+	"\rControlStream\x12!.ajiasu.gateway.v1.GatewayMessage\x1a!.ajiasu.gateway.v1.ControlMessage(\x010\x01BDZBgithub.com/znicelya/ajiasu-proxy/internal/gen/gateway/v1;gatewayv1b\x06proto3"
 
 var (
 	file_gateway_v1_gateway_proto_rawDescOnce sync.Once

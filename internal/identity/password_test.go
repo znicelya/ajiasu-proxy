@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/identity"
+	"github.com/znicelya/ajiasu-proxy/internal/identity"
 )
 
 func TestHashPasswordEncodesArgon2idParametersAndVerifies(t *testing.T) {

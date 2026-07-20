@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
 	"github.com/google/uuid"
 )
 

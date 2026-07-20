@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/audit"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
-	"github.com/dnomd343/ajiasu-proxy/internal/testkit"
+	"github.com/znicelya/ajiasu-proxy/internal/audit"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/testkit"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/audit/dbgen"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/audit/dbgen"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
 	"github.com/google/uuid"
 )
 

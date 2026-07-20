@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/audit"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
-	"github.com/dnomd343/ajiasu-proxy/internal/tenancy/dbgen"
+	"github.com/znicelya/ajiasu-proxy/internal/audit"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/tenancy/dbgen"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )

@@ -440,7 +440,7 @@ const file_relay_v1_relay_proto_rawDesc = "" +
 	"RelayError\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code2S\n" +
 	"\vRunnerRelay\x12D\n" +
-	"\x04Open\x12\x1b.ajiasu.relay.v1.RelayFrame\x1a\x1b.ajiasu.relay.v1.RelayFrame(\x010\x01B@Z>github.com/dnomd343/ajiasu-proxy/internal/gen/relay/v1;relayv1b\x06proto3"
+	"\x04Open\x12\x1b.ajiasu.relay.v1.RelayFrame\x1a\x1b.ajiasu.relay.v1.RelayFrame(\x010\x01B@Z>github.com/znicelya/ajiasu-proxy/internal/gen/relay/v1;relayv1b\x06proto3"
 
 var (
 	file_relay_v1_relay_proto_rawDescOnce sync.Once

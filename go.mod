@@ -1,4 +1,4 @@
-module github.com/dnomd343/ajiasu-proxy
+module github.com/znicelya/ajiasu-proxy
 
 go 1.25.0
 

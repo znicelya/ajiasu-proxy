@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/httpserver/dbgen"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/keyring"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/httpserver/dbgen"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/keyring"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"

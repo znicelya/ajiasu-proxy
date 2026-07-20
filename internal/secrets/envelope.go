@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/keyring"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/keyring"
 )
 
 const (

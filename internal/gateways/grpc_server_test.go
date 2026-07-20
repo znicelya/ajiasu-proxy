@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	gatewayv1 "github.com/dnomd343/ajiasu-proxy/internal/gen/gateway/v1"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
-	"github.com/dnomd343/ajiasu-proxy/internal/testkit"
+	gatewayv1 "github.com/znicelya/ajiasu-proxy/internal/gen/gateway/v1"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/testkit"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/credentials"

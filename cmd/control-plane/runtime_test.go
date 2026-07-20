@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/config"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/httpserver"
-	"github.com/dnomd343/ajiasu-proxy/internal/testkit"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/config"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/httpserver"
+	"github.com/znicelya/ajiasu-proxy/internal/testkit"
 )
 
 func TestRunningControlPlaneTransitionsReadyAcrossMigration(t *testing.T) {

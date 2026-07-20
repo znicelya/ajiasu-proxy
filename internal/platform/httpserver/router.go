@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/observability"
+	"github.com/znicelya/ajiasu-proxy/internal/observability"
 	"github.com/go-chi/chi/v5"
 )
 

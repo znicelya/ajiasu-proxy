@@ -17,22 +17,22 @@
   },
   "images": {
     "control-plane": {
-      "repository": "ghcr.io/dnomd343/ajiasu-control-plane",
+      "repository": "ghcr.io/znicelya/ajiasu-control-plane",
       "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "platforms": ["linux/amd64", "linux/arm64"]
     },
     "gateway": {
-      "repository": "ghcr.io/dnomd343/ajiasu-gateway",
+      "repository": "ghcr.io/znicelya/ajiasu-gateway",
       "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
       "platforms": ["linux/amd64", "linux/arm64"]
     },
     "agent": {
-      "repository": "ghcr.io/dnomd343/ajiasu-agent",
+      "repository": "ghcr.io/znicelya/ajiasu-agent",
       "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
       "platforms": ["linux/amd64", "linux/arm64"]
     },
     "runner": {
-      "repository": "ghcr.io/dnomd343/ajiasu-runner",
+      "repository": "ghcr.io/znicelya/ajiasu-runner",
       "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
       "platforms": ["linux/amd64", "linux/arm64"]
     },

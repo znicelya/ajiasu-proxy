@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
-	"github.com/dnomd343/ajiasu-proxy/internal/tenancy"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/tenancy"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )

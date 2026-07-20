@@ -5,7 +5,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/tenancy"
+	"github.com/znicelya/ajiasu-proxy/internal/tenancy"
 	"github.com/google/uuid"
 )
 

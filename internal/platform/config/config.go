@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/securefile"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/securefile"
 )
 
 type Environment string

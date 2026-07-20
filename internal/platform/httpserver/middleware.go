@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/requestctx"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/requestctx"
 )
 
 const maxRequestBodyBytes = 1 << 20

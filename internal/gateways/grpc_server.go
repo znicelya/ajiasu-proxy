@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	gatewayv1 "github.com/dnomd343/ajiasu-proxy/internal/gen/gateway/v1"
+	gatewayv1 "github.com/znicelya/ajiasu-proxy/internal/gen/gateway/v1"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/audit"
-	"github.com/dnomd343/ajiasu-proxy/internal/identity"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/config"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/keyring"
+	"github.com/znicelya/ajiasu-proxy/internal/audit"
+	"github.com/znicelya/ajiasu-proxy/internal/identity"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/config"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/keyring"
 	"github.com/google/uuid"
 	"golang.org/x/term"
 )

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/gateways"
+	"github.com/znicelya/ajiasu-proxy/internal/gateways"
 	"github.com/google/uuid"
 )
 

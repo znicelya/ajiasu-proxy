@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const phase7Revision1SHA256 = "c4db44e735e62d2faa9e2fff4348140e17ccdf9b175b84a290861925acffad30"
+const phase7Revision1SHA256 = "e6665687eb0dd9451ad9e26498744d35293c544cd9f7d49541285e1f8e86751b"
 
 type configurationMatrix struct {
 	Revision        int                   `yaml:"revision"`
@@ -92,7 +92,7 @@ func TestPhase7ReleaseManifestRejectsInvalidContracts(t *testing.T) {
 		{
 			name: "mutable image tag",
 			mutate: func(document map[string]any) {
-				document["images"].(map[string]any)["agent"].(map[string]any)["repository"] = "ghcr.io/dnomd343/ajiasu-agent:latest"
+				document["images"].(map[string]any)["agent"].(map[string]any)["repository"] = "ghcr.io/znicelya/ajiasu-agent:latest"
 			},
 		},
 		{
@@ -104,7 +104,7 @@ func TestPhase7ReleaseManifestRejectsInvalidContracts(t *testing.T) {
 		{
 			name: "implemented console image",
 			mutate: func(document map[string]any) {
-				document["profiles"].(map[string]any)["console"].(map[string]any)["image"] = "ghcr.io/dnomd343/ajiasu-console@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+				document["profiles"].(map[string]any)["console"].(map[string]any)["image"] = "ghcr.io/znicelya/ajiasu-console@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 			},
 		},
 	}

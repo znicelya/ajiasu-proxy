@@ -3,7 +3,7 @@ package nodes
 import (
 	"context"
 	"errors"
-	agentv1 "github.com/dnomd343/ajiasu-proxy/internal/gen/agent/v1"
+	agentv1 "github.com/znicelya/ajiasu-proxy/internal/gen/agent/v1"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

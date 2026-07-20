@@ -6,9 +6,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/config"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
-	"github.com/dnomd343/ajiasu-proxy/internal/testkit"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/config"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/testkit"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )

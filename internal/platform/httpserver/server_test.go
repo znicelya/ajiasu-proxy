@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/config"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/requestctx"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/config"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/requestctx"
 )
 
 type readinessFunc func(context.Context) error

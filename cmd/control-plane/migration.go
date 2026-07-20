@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/config"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/config"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )

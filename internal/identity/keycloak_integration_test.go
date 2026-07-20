@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/testkit"
+	"github.com/znicelya/ajiasu-proxy/internal/testkit"
 )
 
 func TestKeycloakDiscoveryAndPKCEAuthorizationContract(t *testing.T) {

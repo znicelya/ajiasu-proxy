@@ -7,8 +7,8 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/httpserver"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/requestctx"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/httpserver"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/requestctx"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"

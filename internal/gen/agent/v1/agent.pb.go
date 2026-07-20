@@ -1758,7 +1758,7 @@ const file_agent_v1_agent_proto_rawDesc = "" +
 	"\x19COMMAND_ACK_CODE_REJECTED\x10\x042\xc0\x01\n" +
 	"\fAgentControl\x12[\n" +
 	"\fRegisterNode\x12$.ajiasu.agent.v1.RegisterNodeRequest\x1a%.ajiasu.agent.v1.RegisterNodeResponse\x12S\n" +
-	"\rControlStream\x12\x1d.ajiasu.agent.v1.AgentMessage\x1a\x1f.ajiasu.agent.v1.ControlMessage(\x010\x01B@Z>github.com/dnomd343/ajiasu-proxy/internal/gen/agent/v1;agentv1b\x06proto3"
+	"\rControlStream\x12\x1d.ajiasu.agent.v1.AgentMessage\x1a\x1f.ajiasu.agent.v1.ControlMessage(\x010\x01B@Z>github.com/znicelya/ajiasu-proxy/internal/gen/agent/v1;agentv1b\x06proto3"
 
 var (
 	file_agent_v1_agent_proto_rawDescOnce sync.Once

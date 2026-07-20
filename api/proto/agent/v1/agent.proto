@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package ajiasu.agent.v1;
 
-option go_package = "github.com/dnomd343/ajiasu-proxy/internal/gen/agent/v1;agentv1";
+option go_package = "github.com/znicelya/ajiasu-proxy/internal/gen/agent/v1;agentv1";
 
 service AgentControl {
   rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);

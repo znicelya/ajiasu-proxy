@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/httpserver"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/httpserver"
 )
 
 type failingReadiness struct{ message string }

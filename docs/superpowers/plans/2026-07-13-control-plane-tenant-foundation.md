@@ -23,7 +23,7 @@
 
 ## Locked Go Modules
 
-Initialize the module as `github.com/dnomd343/ajiasu-proxy` with:
+Initialize the module as `github.com/znicelya/ajiasu-proxy` with:
 
 ```text
 go 1.25.0
@@ -116,7 +116,7 @@ Generated sqlc files live under the owning module's `internal/.../dbgen` directo
 Run:
 
 ```powershell
-go mod init github.com/dnomd343/ajiasu-proxy
+go mod init github.com/znicelya/ajiasu-proxy
 go mod edit -go=1.25.0 -toolchain=go1.25.3
 go get github.com/go-chi/chi/v5@v5.3.1
 go get github.com/prometheus/client_golang@v1.23.2

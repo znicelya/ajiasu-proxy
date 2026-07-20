@@ -3,7 +3,7 @@ package httpserver
 import (
 	"net/http"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/config"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/config"
 )
 
 func NewServer(cfg config.HTTP, handler http.Handler) *http.Server {

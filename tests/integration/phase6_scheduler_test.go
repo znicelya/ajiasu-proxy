@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/gateways"
-	"github.com/dnomd343/ajiasu-proxy/internal/health"
-	"github.com/dnomd343/ajiasu-proxy/internal/scheduler"
+	"github.com/znicelya/ajiasu-proxy/internal/gateways"
+	"github.com/znicelya/ajiasu-proxy/internal/health"
+	"github.com/znicelya/ajiasu-proxy/internal/scheduler"
 	"github.com/google/uuid"
 )
 

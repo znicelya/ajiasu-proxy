@@ -6,9 +6,9 @@ import (
 	"errors"
 	"time"
 
-	agentv1 "github.com/dnomd343/ajiasu-proxy/internal/gen/agent/v1"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/database"
-	"github.com/dnomd343/ajiasu-proxy/internal/secrets"
+	agentv1 "github.com/znicelya/ajiasu-proxy/internal/gen/agent/v1"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/database"
+	"github.com/znicelya/ajiasu-proxy/internal/secrets"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )

@@ -16,7 +16,7 @@ RUN runner/scripts/fetch-ajiasu.sh "$TARGETARCH" /out
 
 FROM ${ALPINE_IMAGE}
 ARG REVISION=unknown
-ARG SOURCE=https://github.com/dnomd343/ajiasu-proxy
+ARG SOURCE=https://github.com/znicelya/ajiasu-proxy
 LABEL org.opencontainers.image.title="AJiaSu Runner" \
       org.opencontainers.image.version="4.2.3.0" \
       org.opencontainers.image.description="Verified isolated runner for the official AJiaSu Linux CLI" \

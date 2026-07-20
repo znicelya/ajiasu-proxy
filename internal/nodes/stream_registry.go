@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	agentv1 "github.com/dnomd343/ajiasu-proxy/internal/gen/agent/v1"
+	agentv1 "github.com/znicelya/ajiasu-proxy/internal/gen/agent/v1"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 )

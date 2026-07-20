@@ -21,7 +21,7 @@ RUN --mount=type=cache,id=ajiasu-cargo-registry-${TARGETARCH},target=/usr/local/
 FROM ${RUNTIME_IMAGE}
 ARG VERSION=0.7.0-dev.1
 ARG REVISION=unknown
-ARG SOURCE=https://github.com/dnomd343/ajiasu-proxy
+ARG SOURCE=https://github.com/znicelya/ajiasu-proxy
 LABEL org.opencontainers.image.title="AJiaSu Agent" \
       org.opencontainers.image.description="Node-local AJiaSu Runner lifecycle and relay agent" \
       org.opencontainers.image.version="${VERSION}" \

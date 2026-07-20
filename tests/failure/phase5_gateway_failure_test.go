@@ -1,7 +1,7 @@
 package failure
 
 import (
-	"github.com/dnomd343/ajiasu-proxy/internal/gateways"
+	"github.com/znicelya/ajiasu-proxy/internal/gateways"
 	"testing"
 	"time"
 )

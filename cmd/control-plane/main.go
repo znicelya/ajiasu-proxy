@@ -9,9 +9,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/config"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/httpserver"
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/logging"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/config"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/httpserver"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/logging"
 )
 
 func main() {

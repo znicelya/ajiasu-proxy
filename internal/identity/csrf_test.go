@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/identity"
+	"github.com/znicelya/ajiasu-proxy/internal/identity"
 )
 
 func TestSynchronizerCSRFTokenIsRandomAndComparedExactly(t *testing.T) {

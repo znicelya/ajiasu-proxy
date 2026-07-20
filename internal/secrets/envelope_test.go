@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dnomd343/ajiasu-proxy/internal/platform/keyring"
+	"github.com/znicelya/ajiasu-proxy/internal/platform/keyring"
 	"github.com/google/uuid"
 )
 
