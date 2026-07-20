@@ -367,20 +367,49 @@ Remove-Item Env:AJIASU_PHASE9_LOAD_GATE
 
 测试前后必须查询 PostgreSQL 中的分配和账户 reservation，证明没有 lease oversell 或账户并发超限。不要仅凭客户端成功率宣布容量门禁通过。
 
-## 构建 Runner 镜像
+## 构建四个运行镜像
 
-Runner 锁定官方 AJiaSu archive 的版本、大小和校验和，同时锁定 Alpine 基础镜像 digest。不要替换为可变 tag。
+仓库包含四个生产运行镜像：
+
+| 镜像 | Dockerfile | CI 扫描标签 |
+| --- | --- | --- |
+| Control Plane | `Dockerfile.control-plane` | `ajiasu/control-plane:ci` |
+| Gateway | `Dockerfile.gateway` | `ajiasu/gateway:ci` |
+| Agent | `Dockerfile.agent` | `ajiasu/agent:ci` |
+| Runner | `Dockerfile` | `ajiasu/runner:ci` |
+
+推荐使用统一的 Compose 镜像门禁构建全部四个镜像：
 
 ```powershell
-$lockLine = Get-Content runner/artifacts/alpine-3.22.lock
-if ($lockLine -notmatch '^ALPINE_IMAGE=(alpine:3\.22@sha256:[0-9a-f]{64})$') {
-  throw 'Invalid Alpine image lock'
-}
-$alpineImage = $Matches[1]
-docker build --pull=false `
-  --build-arg "ALPINE_IMAGE=$alpineImage" `
-  -t ajiasu-runner:test .
+pwsh -File scripts/compose-image-ci.ps1 `
+  -Image control-plane,gateway,agent,runner
 ```
+
+该流程会：
+
+1. 从 `build/compose-images.lock` 读取按 digest 锁定的 Go、Rust、Alpine 和 SBOM 扫描器镜像。
+2. 使用 Buildx 为 `linux/amd64` 和 `linux/arm64` 执行无缓存构建。
+3. 为构建结果生成 SBOM 和 `mode=max` provenance。
+4. 分别加载一个 `linux/amd64` 的本地 CI 镜像，检查镜像元数据是否意外包含 secret。
+5. 使用 Trivy 扫描 HIGH/CRITICAL 漏洞及 secret；存在未通过项时构建失败。
+
+也可以只构建指定镜像，例如：
+
+```powershell
+# 单个镜像
+pwsh -File scripts/compose-image-ci.ps1 -Image gateway
+
+# 多个镜像
+pwsh -File scripts/compose-image-ci.ps1 -Image control-plane,agent
+```
+
+完整 Compose 发布门禁还会先执行 Go/Rust 测试、静态检查和 Compose 集成测试，再构建并扫描镜像：
+
+```powershell
+pwsh -File scripts/compose-ci.ps1
+```
+
+Runner 构建会额外校验官方 AJiaSu archive 的版本、大小和校验和。所有基础镜像及发布镜像都必须使用不可变 digest，不要替换为 `latest` 或其他可变 tag。`compose-image-ci.ps1` 的多架构结果使用 `type=cacheonly` 验证，不会推送到镜像仓库；正式发布时应在受保护的发布流水线中使用相同的锁定输入、SBOM、provenance 和扫描门禁，并将最终 manifest 推送后固定为 digest。
 
 ## 开发与测试
 
