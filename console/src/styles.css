@@ -2,6 +2,10 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
 button, a { -webkit-tap-highlight-color: transparent; }
+.skip-link { position: fixed; z-index: 1000; top: 8px; left: 8px; padding: 10px 14px; color: #102a2e; background: #fff; border: 2px solid #20836f; border-radius: 6px; transform: translateY(-160%); }
+.skip-link:focus { transform: translateY(0); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+:where(button, a, [tabindex]):focus-visible { outline: 3px solid #20836f; outline-offset: 3px; }
 .app-shell { min-height: 100dvh; display: grid; grid-template-columns: 248px minmax(0, 1fr); }
 .rail { background: #102a2e; color: #eff8f6; padding: 24px 16px; display: flex; flex-direction: column; gap: 28px; }
 .brand-mark { font-size: 20px; font-weight: 700; letter-spacing: -.03em; display: flex; align-items: center; gap: 10px; }
@@ -10,7 +14,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .tenant-context strong { color: #fff; overflow: hidden; text-overflow: ellipsis; }
 .nav-list { display: grid; gap: 4px; }
 .nav-item { color: #b8cfcb; text-decoration: none; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; font-size: 14px; }
-.nav-item:hover, .nav-item:focus-visible { color: #fff; background: rgb(102 210 197 / .14); outline: none; }
+.nav-item:hover, .nav-item:focus-visible { color: #fff; background: rgb(102 210 197 / .14); }
 .nav-item.active { color: #102a2e; background: #a8e3da; font-weight: 650; }
 .rail-footer { margin-top: auto; display: grid; gap: 8px; color: #8faeaa; }
 .session-state { color: #d2e5e1; font-size: 13px; display: flex; align-items: center; gap: 8px; }

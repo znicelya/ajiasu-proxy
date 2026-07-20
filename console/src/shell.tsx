@@ -27,13 +27,14 @@ export function App() {
 
 function Shell({ tenantId }: { tenantId: string }) {
   return <div className="app-shell">
+    <a className="skip-link" href="#main-content">Skip to main content</a>
     <aside className="rail" aria-label="Primary navigation">
       <div className="brand-mark"><span className="brand-dot" /> AJiaSu</div>
       <div className="tenant-context"><Text size={200}>ACTIVE TENANT</Text><strong>{tenantId}</strong></div>
       <nav className="nav-list">{nav.map(([label, path, Icon]) => <NavLink key={path} to={`/${path}?tenant=${encodeURIComponent(tenantId)}`} className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}><Icon /><span>{label}</span></NavLink>)}</nav>
       <div className="rail-footer"><Text size={200}>SECURE SESSION</Text><span className="session-state"><span className="status-dot good" /> Protected</span></div>
     </aside>
-    <main className="content"><header className="topbar"><div><Text className="eyebrow">CONTROL ROOM / {tenantId}</Text><Title1>Platform operations</Title1></div><Button appearance="subtle" onClick={() => window.location.assign("/api/v1/auth/logout")}>Sign out</Button></header><Routes>
+    <main className="content" id="main-content" tabIndex={-1}><header className="topbar"><div><Text className="eyebrow">CONTROL ROOM / {tenantId}</Text><Title1>Platform operations</Title1></div><Button appearance="subtle" onClick={() => window.location.assign("/api/v1/auth/logout")}>Sign out</Button></header><Routes>
       <Route path="/" element={<Overview tenantId={tenantId} />} />
       <Route path="/overview" element={<Overview tenantId={tenantId} />} />
       {nav.slice(1).map(([label, path]) => <Route key={path} path={`/${path}`} element={<ResourcePage tenantId={tenantId} kind={path as ResourceKind} label={label} />} />)}

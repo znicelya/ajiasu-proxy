@@ -15,4 +15,5 @@ foreach ($route in @('accounts', 'account-pools', 'endpoints', 'operations', 'no
 $shell = Get-Content -Raw (Join-Path $console 'src\shell.tsx')
 foreach ($state in @('LoadingState', 'EmptyState', 'ErrorState', 'If-Match', 'Idempotency-Key')) { if (-not ($api + $shell).Contains($state)) { throw "Console contract missing state or concurrency behavior: $state" } }
 if (-not $shell.Contains('!key.includes("secret")') -or -not $shell.Contains('key !== "credential"')) { throw 'Console table must filter secret-shaped fields' }
+& (Join-Path $PSScriptRoot 'accessibility.ps1')
 Write-Host 'Phase 9 Console contract passed.'
