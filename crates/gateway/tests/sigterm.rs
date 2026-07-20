@@ -1,5 +1,6 @@
 #![cfg(unix)]
 
+use ajiasu_gateway::session::{self, SessionState};
 use ed25519_dalek::SigningKey;
 use std::{
     fs,
@@ -17,6 +18,16 @@ fn sigterm_completes_within_shutdown_deadline() {
     fs::write(
         &verifying_key,
         SigningKey::from_bytes(&[7; 32]).verifying_key().to_bytes(),
+    )
+    .unwrap();
+    session::save(
+        &root.join("session.json"),
+        &SessionState {
+            gateway_id: "sigterm-gateway".to_owned(),
+            gateway_instance_id: uuid::Uuid::now_v7().to_string(),
+            session_token: "sigterm-session-token".to_owned(),
+            protocol_revision: 1,
+        },
     )
     .unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_ajiasu-gateway"))
