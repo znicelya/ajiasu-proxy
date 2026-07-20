@@ -18,3 +18,6 @@ deploy/compose/*.local.yaml
 deploy/compose/env/*.local
 */node_modules/*
 */node_modules
+console/node_modules/
+.cache
+.agents
